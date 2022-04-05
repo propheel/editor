@@ -8,9 +8,9 @@ var COVERAGE_PATH = artifacts.pathSync("/coverage");
 var coverage = istanbulCov.createCoverageMap({});
 
 // Capture the coverage after each test
-afterEach(function() {
+afterEach(async function() {
   // Code coverage
-  var results = browser.execute(function() {
+  var results = await browser.execute(function() {
     return window.__coverage__;
   });
 
