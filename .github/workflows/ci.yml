@@ -172,7 +172,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-node-
     - run: npm install
-    - run: BROWSER=${{ matrix.browser }} TEST_NETWORK=testhost DOCKER_HOST=selenium npm run test
+    - run: BROWSER=${{ matrix.browser }} npm run test
     - if: ${{ matrix.browser == 'chrome' }}
       run: ./node_modules/.bin/istanbul report --include build/coverage/coverage.json --dir build/coverage html lcov
     - if: ${{ matrix.browser == 'chrome' }}
