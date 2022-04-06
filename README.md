@@ -80,22 +80,10 @@ For testing we use [webdriverio](http://webdriver.io) and [selenium-standalone](
 
 [selenium-standalone](https://github.com/vvo/selenium-standalone) starts a server that will launch browsers on your local machine. We use chrome so you **must** have chrome installed on your machine.
 
-Now open a terminal and run the following. This will install the drivers on your local machine
+Now open a terminal and run the following.
 
 ```
-./node_modules/.bin/selenium-standalone install
-```
-
-Now start the standalone server
-
-```
-./node_modules/.bin/selenium-standalone start
-```
-
-Then open another terminal and run
-
-```
-npm test
+npm run test
 ```
 
 After some time you should see a browser launch which will be automated by the test runner.
