@@ -7,6 +7,23 @@ var artifacts        = require("../test/artifacts");
 
 var server;
 var SCREENSHOT_PATH = artifacts.pathSync("screenshots");
+var browser = (process.env.BROWSER || 'chrome');
+var browserCapabilities = (browser == 'chrome') ?
+{
+  maxInstances: 5,
+  browserName: 'chrome',
+  'goog:chromeOptions': {
+    args: ['--headless', '--disable-gpu']
+  }
+}
+:
+{
+  maxInstances: 5,
+  browserName: 'firefox',
+  'moz:firefoxOptions': {
+    args: ['-headless']
+  }
+};
 
 exports.config = {
   runner: 'local',
@@ -16,16 +33,7 @@ exports.config = {
   ],
   maxInstances: 10,
   capabilities: [
-    {
-      maxInstances: 5,
-      browserName: (process.env.BROWSER || 'chrome'),
-      'goog:chromeOptions': {
-        args: ['--headless', '--disable-gpu'],
-      },
-      'moz:firefoxOptions': {
-        args: ['-headless'],
-      },
-    }
+    browserCapabilities
   ],
   services: ['selenium-standalone'],
   logLevel: 'info',
