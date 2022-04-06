@@ -3,7 +3,6 @@ var WebpackDevServer = require("webpack-dev-server");
 var webpackConfig    = require("./webpack.config");
 var testConfig       = require("../test/config/specs");
 var artifacts        = require("../test/artifacts");
-var isDocker         = require("is-docker");
 
 
 var server;
@@ -20,12 +19,19 @@ exports.config = {
     {
       maxInstances: 5,
       browserName: (process.env.BROWSER || 'chrome'),
+      'goog:chromeOptions': {
+        args: ['--headless', '--disable-gpu'],
+      },
+      'moz:firefoxOptions': {
+        args: ['-headless'],
+      },
     }
   ],
+  services: ['selenium-standalone'],
   logLevel: 'info',
   bail: 0,
   screenshotPath: SCREENSHOT_PATH,
-  hostname: process.env.DOCKER_HOST || "0.0.0.0",
+  hostname: "0.0.0.0",
   framework: 'mocha',
   reporters: ['spec'],
   mochaOpts: {
