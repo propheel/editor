@@ -22,6 +22,7 @@ exports.config = {
       browserName: (process.env.BROWSER || 'chrome'),
     }
   ],
+  services: ['selenium-standalone'],
   logLevel: 'info',
   bail: 0,
   screenshotPath: SCREENSHOT_PATH,
