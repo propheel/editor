@@ -185,12 +185,12 @@ jobs:
       run: ./node_modules/.bin/istanbul report --include build/coverage/coverage.json --dir build/coverage html lcov
     - if: ${{ matrix.browser == 'chrome' }}
       name: artifacts/coverage
+      uses: actions/upload-artifact@v1
+      with:
         name: coverage
         path: build/coverage
     - name: artifacts/screenshots
       uses: actions/upload-artifact@v1
       with:
-        name: screenshots-chrome
-        path: build/screenshots
         name: screenshots-${{ matrix.browser }}
         path: build/screenshots
