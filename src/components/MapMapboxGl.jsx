@@ -13,9 +13,11 @@ import { colorHighlightedLayer } from '../libs/highlight'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import '../mapboxgl.css'
 import '../libs/mapbox-rtl'
+import style from '../libs/style'
 
 
 const IS_SUPPORTED = MapboxGl.supported();
+let transformSubscriptionKey = '';
 
 function renderPopup(popup, mountNode) {
   ReactDOM.render(popup, mountNode);
@@ -91,10 +93,25 @@ export default class MapMapboxGl extends React.Component {
 
     //Mapbox GL now does diffing natively so we don't need to calculate
     //the necessary operations ourselves!
+    const subscriptionKey = metadata['maputnik:azuremaps_subscription_key'] || ENVIRONMENT.subscriptionKey;
+    const tilesetId = metadata['maputnik:azuremaps_tileset_id'];
+    const bbox = metadata['maputnik:azuremaps_tileset_bbox'];
+    transformSubscriptionKey = subscriptionKey;
+
+    const mapStyle = style.isAzureMapsStyle(props.mapStyle) ? style.toAzureMapsStyle(props.mapStyle, subscriptionKey, tilesetId): props.mapStyle
     this.state.map.setStyle(
-      this.props.replaceAccessTokens(props.mapStyle),
+      this.props.replaceAccessTokens(mapStyle),
       {diff: true}
     )
+
+    if(bbox){
+      this.state.map.fitBounds([
+        [bbox[0], bbox[1]],
+        [bbox[2], bbox[3]]
+      ], {
+        zoom: 19
+      })
+    }
   }
 
   shouldComponentUpdate(nextProps, nextState) {
@@ -141,13 +158,30 @@ export default class MapMapboxGl extends React.Component {
   componentDidMount() {
     if(!IS_SUPPORTED) return;
 
+    const metadata = this.props.mapStyle.metadata || {};
+    const tilesetId = metadata['maputnik:azuremaps_tileset_id'];
+    const bbox = metadata['maputnik:azuremaps_tileset_bbox'];
+    transformSubscriptionKey = metadata['maputnik:azuremaps_subscription_key'] || ENVIRONMENT.subscriptionKey
+
     const mapOpts = {
       ...this.props.options,
       container: this.container,
-      style: this.props.mapStyle,
+      style: style.isAzureMapsStyle(this.props.mapStyle) ? style.toAzureMapsStyle(this.props.mapStyle, transformSubscriptionKey, tilesetId): this.props.mapStyle,
       hash: true,
       maxZoom: 24
-    }
+    };
+
+    mapOpts.transformRequest = (url, resourceType) => {
+      const requestParams = { url };
+      if (resourceType === "Tile" && transformSubscriptionKey && (requestParams.url.includes(style.globalAzMapsDomain) && !requestParams.url.includes('subscription-key'))) {
+        requestParams.url += '&subscription-key=' + transformSubscriptionKey;
+      } else if (resourceType === 'SpriteJSON' || resourceType === 'SpriteImage') {
+        // Transformation for Sprite
+      } else if (resourceType === 'Glyphs') {
+        // Transformation for Glyphs
+      }
+      return requestParams;
+    };
 
     const map = new MapboxGl.Map(mapOpts);
 
@@ -199,6 +233,15 @@ export default class MapMapboxGl extends React.Component {
         inspect,
         zoom: map.getZoom()
       });
+
+      if(bbox){
+        map.fitBounds([
+          [bbox[0], bbox[1]],
+          [bbox[2], bbox[3]]
+        ], {
+          zoom: 19
+        })
+      }
     })
 
     map.on("data", e => {

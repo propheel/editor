@@ -1,5 +1,6 @@
 import deref from '@mapbox/mapbox-gl-style-spec/deref'
 import tokens from '../config/tokens.json'
+import cloneDeep from 'lodash.clonedeep'
 
 // Empty style is always used if no style could be restored or fetched
 const emptyStyle = ensureStyleValidity({
@@ -118,12 +119,79 @@ function stripAccessTokens(mapStyle) {
   const changedMetadata = {
     ...mapStyle.metadata
   };
+  delete changedMetadata['maputnik:azuremaps_subscription_key'];
   delete changedMetadata['maputnik:mapbox_access_token'];
   delete changedMetadata['maputnik:openmaptiles_access_token'];
   return {
     ...mapStyle,
     metadata: changedMetadata
   };
+}
+
+/** Azure Maps Parameters */
+// us prefix so creator is sounds without additional logic
+const azMapsDomain = 'us.atlas.microsoft.com';
+const globalAzMapsDomain = 'atlas.microsoft.com';
+const azMapsStylingPath = 'styling';
+const azMapsLanguage = 'en-US';
+const azMapsView = 'Auto';
+const apiVersion = '2.0';
+
+function isAzureMapsStyle(mapStyle) {
+  const styleId = mapStyle.id;
+  console.log('StyleId: ',styleId);
+  return styleId && styleId.startsWith('azmaps-');
+}
+
+function toAzureMapsSprite(sprite) {
+  if (sprite.includes('{{azMapsDomain}}') === false) return sprite;
+  return sprite.replace('{{azMapsDomain}}', azMapsDomain)
+               .replace('{{azMapsStylingPath}}', azMapsStylingPath)
+               +`&api-version=${apiVersion}`;
+}
+
+function toAzureMapGlyphs(glyphs) {
+  if (glyphs.includes('{{azMapsDomain}}') === false) return glyphs;
+  return glyphs.replace('{{azMapsDomain}}', azMapsDomain)
+               .replace('{{azMapsStylingPath}}', azMapsStylingPath)
+               +`?api-version=${apiVersion}`;
+}
+
+function toAzureMapSourceUrl(sourceUrl, subscriptionKey, tilesetId) {
+  if (sourceUrl.includes('{{azMapsDomain}}') === false) return sourceUrl;
+  return sourceUrl.replace('{{azMapsDomain}}', azMapsDomain)
+                  .replace('{{azMapsLanguage}}', azMapsLanguage)
+                  .replace('{{azMapsView}}', azMapsView)
+                  .replace('{tilesetId}', tilesetId)
+                  +'&subscription-key=' + subscriptionKey;
+}
+
+function toAzureMapsStyle (originalStyle, subscriptionKey, tilesetId) {
+
+  const style = cloneDeep(originalStyle);
+
+  style['sprite'] = toAzureMapsSprite(style['sprite']);
+  style['glyphs'] = toAzureMapGlyphs(style['glyphs']);
+
+  for (const sourceKey in style['sources']) {
+    const source = style.sources[sourceKey];
+    if (sourceKey === 'vectorTiles' || sourceKey === 'satelliteSource') {
+      source.url = toAzureMapSourceUrl(source.url, subscriptionKey, tilesetId)
+    } else if('tiles' in source) {
+      source.tiles = source.tiles.map(url => toAzureMapSourceUrl(url, subscriptionKey, tilesetId));
+    }
+  }
+
+  // hack: for now
+  style.layers.filter(layer => layer.layout !== undefined).forEach(layer => {
+    layer.layout.visibility = 'visible'
+  });
+
+  return style;
+}
+
+function generateAzureMapsStyleId(baseStyleName) {
+  return 'azmaps-' + baseStyleName[0].toLowerCase() + baseStyleName.slice(1) + '-' + generateId();
 }
 
 export default {
@@ -134,4 +202,12 @@ export default {
   getAccessToken,
   replaceAccessTokens,
   stripAccessTokens,
+  isAzureMapsStyle,
+  toAzureMapsStyle,
+  generateAzureMapsStyleId,
+  toAzureMapsSprite,
+  toAzureMapGlyphs,
+  toAzureMapSourceUrl,
+  azMapsDomain,
+  globalAzMapsDomain
 }

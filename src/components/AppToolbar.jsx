@@ -6,7 +6,7 @@ import {detect} from 'detect-browser';
 import {MdFileDownload, MdOpenInBrowser, MdSettings, MdLayers, MdHelpOutline, MdFindInPage, MdAssignmentTurnedIn} from 'react-icons/md'
 
 
-import logoImage from 'maputnik-design/logos/logo-color.svg'
+import logoImage from '../../media/assets/azmaps-icon.svg'
 import pkgJson from '../../package.json'
 
 
@@ -215,12 +215,12 @@ export default class AppToolbar extends React.Component {
             className="maputnik-toolbar-logo"
             target="blank"
             rel="noreferrer noopener"
-            href="https://github.com/maputnik/editor"
+            href="https://github.com/ambientlight/editor"
           >
             <span dangerouslySetInnerHTML={{__html: logoImage}} />
-            <h1>
+            <h1 style={{marginLeft: '5px'}}>
               <span className="maputnik-toolbar-name">{pkgJson.name}</span>
-              <span className="maputnik-toolbar-version">v{pkgJson.version}</span>
+              <span className="maputnik-toolbar-version">Azure Maps</span>
             </h1>
           </a>
         </div>
@@ -274,10 +274,6 @@ export default class AppToolbar extends React.Component {
             <MdHelpOutline />
             <IconText>Help</IconText>
           </ToolbarLink>
-          <ToolbarLinkHighlighted href={"https://gregorywolanski.typeform.com/to/cPgaSY"}>
-            <MdAssignmentTurnedIn />
-            <IconText>Take the Maputnik Survey</IconText>
-          </ToolbarLinkHighlighted>
         </div>
       </div>
     </nav>

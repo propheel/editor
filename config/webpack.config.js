@@ -1,13 +1,39 @@
 "use strict";
+var fs = require('fs');
 var webpack = require('webpack');
 var path = require('path');
 var rules = require('./webpack.rules');
 var HtmlWebpackPlugin = require('html-webpack-plugin');
 var HtmlWebpackInlineSVGPlugin = require('html-webpack-inline-svg-plugin');
 var CopyWebpackPlugin = require('copy-webpack-plugin');
+var DefineWebpackPlugin = require('webpack').DefinePlugin;
 
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = process.env.PORT || "8888";
+
+const subscriptionKeyFileName = '.sub'
+const tilesetIdFileName = '.tid'
+
+const readAsset = (keyFileName) => {
+  try {
+    const subExists = fs.existsSync(keyFileName)
+    if (subExists) {
+      return fs.readFileSync(keyFileName, 'utf8').trim()
+    }
+  } catch(err) {
+    console.error(err)
+  }
+
+  return null
+}
+
+const subscriptionKey = readAsset(subscriptionKeyFileName) || ''
+const tilesetId = readAsset(tilesetIdFileName) || ''
+
+console.log(JSON.stringify({
+  tilesetId,
+  subscriptionKey
+}))
 
 module.exports = {
   target: 'web',
@@ -54,12 +80,18 @@ module.exports = {
       poll: (!!process.env.WEBPACK_DEV_SERVER_POLLING ? true : false),
       watch: false
     },
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+      "Access-Control-Allow-Headers": "X-Requested-With, content-type, Authorization",
+      "Access-Control-Expose-Headers": "x-ms-request-id,Server,x-ms-version,Content-Type,Cache-Control,Last-Modified,ETag,x-ms-lease-status,x-ms-blob-type,Content-Length,Date,Transfer-Encoding"
+    }
   },
   plugins: [
     new webpack.NoEmitOnErrorsPlugin(),
     new webpack.HotModuleReplacementPlugin(),
     new HtmlWebpackPlugin({
-      title: 'Maputnik',
+      title: 'Azure Maps Maputnik',
       template: './src/template.html'
     }),
     new HtmlWebpackInlineSVGPlugin({
@@ -69,7 +101,21 @@ module.exports = {
       {
         from: './src/manifest.json',
         to: 'manifest.json'
+      },
+      {
+        from: './src/favicon.png',
+        to: 'favicon.png'
+      },
+      {
+        from: './src/favicon.svg',
+        to: 'favicon.svg'
       }
-    ])
+    ]),
+    new DefineWebpackPlugin({
+      ENVIRONMENT: JSON.stringify({
+        tilesetId,
+        subscriptionKey
+      })
+    })
   ]
 };

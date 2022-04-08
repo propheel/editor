@@ -205,6 +205,8 @@ export default class App extends React.Component {
     }
 
     const queryObj = url.parse(window.location.href, true).query;
+    const isInitialVisit = window.localStorage.getItem('visited') === null;
+    window.localStorage.setItem('visited', 'true');
 
     this.state = {
       errors: [],
@@ -225,13 +227,14 @@ export default class App extends React.Component {
       isOpen: {
         settings: false,
         sources: false,
-        open: false,
+        open: isInitialVisit,
         shortcuts: false,
         export: false,
         // TODO: Disabled for now, this should be opened on the Nth visit to the editor
         survey: false,
         debug: false,
       },
+      isInitialVisit,
       mapboxGlDebugOptions: {
         showTileBoundaries: false,
         showCollisionBoxes: false,
@@ -287,12 +290,20 @@ export default class App extends React.Component {
     const accessToken = metadata['maputnik:openmaptiles_access_token'] || tokens.openmaptiles
 
     let glyphUrl = (typeof urlTemplate === 'string')? urlTemplate.replace('{key}', accessToken): urlTemplate;
+
+    // Replace placeholder for Azure Maps
+    glyphUrl = style.toAzureMapGlyphs(glyphUrl);
+
     downloadGlyphsMetadata(glyphUrl, fonts => {
       this.setState({ spec: updateRootSpec(this.state.spec, 'glyphs', fonts)})
     })
   }
 
   updateIcons(baseUrl) {
+
+    // Replace placeholder for Azure Maps
+    baseUrl = style.toAzureMapsSprite(baseUrl);
+
     downloadSpriteMetadata(baseUrl, icons => {
       this.setState({ spec: updateRootSpec(this.state.spec, 'sprite', icons)})
     })
@@ -441,7 +452,7 @@ export default class App extends React.Component {
     if (opts.save) {
       this.saveStyle(newStyle);
     }
-       
+
     this.setState({
       mapStyle: newStyle,
       dirtyMapStyle: dirtyMapStyle,
@@ -575,6 +586,9 @@ export default class App extends React.Component {
 
   fetchSources() {
     const sourceList = {};
+    const metadata = this.state.mapStyle.metadata || {};
+    const azMapsSubscriptionKey = metadata['maputnik:azuremaps_subscription_key'] || ENVIRONMENT.subscriptionKey;
+    const isAzureMapStyle = style.isAzureMapsStyle(this.state.mapStyle);
 
     for(let [key, val] of Object.entries(this.state.mapStyle.sources)) {
       if(
@@ -598,6 +612,10 @@ export default class App extends React.Component {
           url = setFetchAccessToken(url, this.state.mapStyle)
         } catch(err) {
           console.warn("Failed to setFetchAccessToken: ", err);
+        }
+
+        if (isAzureMapStyle) {
+          url = style.toAzureMapSourceUrl(url, azMapsSubscriptionKey);
         }
 
         fetch(url, {
@@ -682,12 +700,16 @@ export default class App extends React.Component {
         onLayerSelect={this.onLayerSelect}
       />
     } else {
-      mapElement = <MapMapboxGl {...mapProps}
-        onChange={this.onMapChange}
-        options={this.state.mapboxGlDebugOptions}
-        inspectModeEnabled={this.state.mapState === "inspect"}
-        highlightedLayer={this.state.mapStyle.layers[this.state.selectedLayerIndex]}
-        onLayerSelect={this.onLayerSelect} />
+      if (metadata['maputnik:azuremaps_subscription_key'] || ENVIRONMENT.subscriptionKey) {
+        mapElement = <MapMapboxGl {...mapProps}
+          onChange={this.onMapChange}
+          options={this.state.mapboxGlDebugOptions}
+          inspectModeEnabled={this.state.mapState === "inspect"}
+          highlightedLayer={this.state.mapStyle.layers[this.state.selectedLayerIndex]}
+          onLayerSelect={this.onLayerSelect} />
+      } else {
+        mapElement = <></>
+      }
     }
 
     let filterName;
@@ -829,7 +851,10 @@ export default class App extends React.Component {
   render() {
     const layers = this.state.mapStyle.layers || []
     const selectedLayer = layers.length > 0 ? layers[this.state.selectedLayerIndex] : null
-    const metadata = this.state.mapStyle.metadata || {}
+
+    if (!!this.state.sources && Object.keys(this.state.sources).length > 0) {
+      document.querySelector(".loading").style.display = "none";
+    }
 
     const toolbar = <AppToolbar
       renderer={this._getRenderer()}
@@ -915,7 +940,9 @@ export default class App extends React.Component {
         onOpenToggle={this.toggleModal.bind(this, 'export')}
       />
       <ModalOpen
+        mapStyle={this.state.mapStyle}
         isOpen={this.state.isOpen.open}
+        isInitialVisit={this.state.isInitialVisit}
         onStyleOpen={this.openStyle}
         onOpenToggle={this.toggleModal.bind(this, 'open')}
       />
