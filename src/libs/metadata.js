@@ -1,8 +1,9 @@
 import npmurl from 'url'
 
-function loadJSON(url, defaultValue, cb) {
+function loadJSON(url, headers, defaultValue, cb) {
   fetch(url, {
     mode: 'cors',
+    headers: headers,
     credentials: "same-origin"
   })
   .then(function(response) {
@@ -12,12 +13,12 @@ function loadJSON(url, defaultValue, cb) {
     cb(body)
   })
   .catch(function() {
-    console.warn('Can not metadata for ' + url)
+    console.warn('Cannot fetch metadata for ' + url)
     cb(defaultValue)
   })
 }
 
-export function downloadGlyphsMetadata(urlTemplate, cb) {
+export function downloadGlyphsMetadata(urlTemplate, headers, cb) {
   if(!urlTemplate) return cb([])
 
   // Special handling because Tileserver GL serves the fontstacks metadata differently
@@ -31,11 +32,12 @@ export function downloadGlyphsMetadata(urlTemplate, cb) {
   }
   let url = npmurl.format(urlObj);
 
-  loadJSON(url, [], cb)
+  loadJSON(url, headers, [], cb)
 }
 
-export function downloadSpriteMetadata(baseUrl, cb) {
+export function downloadSpriteMetadata(baseUrl, headers, cb) {
   if(!baseUrl) return cb([])
-  const url = baseUrl + '.json'
-  loadJSON(url, {}, glyphs => cb(Object.keys(glyphs)))
+  let urlObj = npmurl.parse(baseUrl);
+  urlObj.pathname = urlObj.pathname + ".json";
+  loadJSON(npmurl.format(urlObj), headers, {}, glyphs => cb(Object.keys(glyphs)))
 }

@@ -38,6 +38,7 @@ import isEqual from 'lodash.isequal'
 import Debug from '../libs/debug'
 import queryUtil from '../libs/query-util'
 import {formatLayerId} from '../util/format';
+import azureMapsExt from '../libs/azure-maps-ext';
 
 import MapboxGl from 'mapbox-gl'
 
@@ -237,6 +238,7 @@ export default class App extends React.Component {
         showCollisionBoxes: false,
         showOverdrawInspector: false,
       },
+      azureMapsExtension: new azureMapsExt.AzureMapsExtension(),
       openlayersDebugOptions: {
         debugToolbox: false,
       },
@@ -287,15 +289,21 @@ export default class App extends React.Component {
     const accessToken = metadata['maputnik:openmaptiles_access_token'] || tokens.openmaptiles
 
     let glyphUrl = (typeof urlTemplate === 'string')? urlTemplate.replace('{key}', accessToken): urlTemplate;
-    downloadGlyphsMetadata(glyphUrl, fonts => {
-      this.setState({ spec: updateRootSpec(this.state.spec, 'glyphs', fonts)})
-    })
+    downloadGlyphsMetadata(
+      this.state.azureMapsExtension.transformUrl(glyphUrl),
+      this.state.azureMapsExtension.requestHeaders,
+      fonts => {
+        this.setState({ spec: updateRootSpec(this.state.spec, 'glyphs', fonts)})
+      })
   }
 
   updateIcons(baseUrl) {
-    downloadSpriteMetadata(baseUrl, icons => {
-      this.setState({ spec: updateRootSpec(this.state.spec, 'sprite', icons)})
-    })
+    downloadSpriteMetadata(
+      this.state.azureMapsExtension.transformUrl(baseUrl),
+      this.state.azureMapsExtension.requestHeaders,
+      icons => {
+        this.setState({ spec: updateRootSpec(this.state.spec, 'sprite', icons)})
+      })
   }
 
   onChangeMetadataProperty = (property, value) => {
@@ -600,8 +608,11 @@ export default class App extends React.Component {
           console.warn("Failed to setFetchAccessToken: ", err);
         }
 
+        url = this.state.azureMapsExtension.transformUrl(url);
+
         fetch(url, {
           mode: 'cors',
+          headers: this.state.azureMapsExtension.requestHeaders
         })
         .then(response => response.json())
         .then(json => {
@@ -652,6 +663,10 @@ export default class App extends React.Component {
     });
   }
 
+  transformRequest = (url, resourceType) => {
+    return this.state.azureMapsExtension.transformRequest(url, resourceType);
+  }
+
   mapRenderer() {
     const {mapStyle, dirtyMapStyle} = this.state;
     const metadata = this.state.mapStyle.metadata || {};
@@ -684,7 +699,7 @@ export default class App extends React.Component {
     } else {
       mapElement = <MapMapboxGl {...mapProps}
         onChange={this.onMapChange}
-        options={this.state.mapboxGlDebugOptions}
+        options={ {...this.state.mapboxGlDebugOptions, transformRequest: this.transformRequest } }
         inspectModeEnabled={this.state.mapState === "inspect"}
         highlightedLayer={this.state.mapStyle.layers[this.state.selectedLayerIndex]}
         onLayerSelect={this.onLayerSelect} />
@@ -916,6 +931,7 @@ export default class App extends React.Component {
       />
       <ModalOpen
         isOpen={this.state.isOpen.open}
+        azureMapsExtension={this.state.azureMapsExtension}
         onStyleOpen={this.openStyle}
         onOpenToggle={this.toggleModal.bind(this, 'open')}
       />

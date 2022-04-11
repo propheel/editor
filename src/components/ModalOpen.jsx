@@ -3,6 +3,8 @@ import PropTypes from 'prop-types'
 import ModalLoading from './ModalLoading'
 import Modal from './Modal'
 import InputButton from './InputButton'
+import InputString from './InputString'
+import InputSelect from './InputSelect'
 import FileReaderInput from 'react-file-reader-input'
 import InputUrl from './InputUrl'
 
@@ -11,6 +13,7 @@ import {MdAddCircleOutline} from 'react-icons/md'
 
 import style from '../libs/style.js'
 import publicStyles from '../config/styles.json'
+import azureMapsExt from '../libs/azure-maps-ext'
 
 class PublicStyle extends React.Component {
   static propTypes = {
@@ -46,6 +49,7 @@ class PublicStyle extends React.Component {
 export default class ModalOpen extends React.Component {
   static propTypes = {
     isOpen: PropTypes.bool.isRequired,
+    azureMapsExtension: PropTypes.object.isRequired,
     onOpenToggle: PropTypes.func.isRequired,
     onStyleOpen: PropTypes.func.isRequired,
   }
@@ -53,7 +57,13 @@ export default class ModalOpen extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      styleUrl: ""
+      styleUrl: "",
+      azMapsKey: props.azureMapsExtension.subscriptionKey,
+      azMapsDomain: props.azureMapsExtension.domain,
+      azMapsStyleSetList: props.azureMapsExtension.styleSetList.styleSets,
+      azMapsStyleSetName: props.azureMapsExtension.styleSetName,
+      azMapsStyleSet: props.azureMapsExtension.styleSet,
+      azMapsStyleUrl: props.azureMapsExtension.styleUrl
     };
   }
 
@@ -167,6 +177,194 @@ export default class ModalOpen extends React.Component {
     });
   }
 
+  onChangeAzureMapsSubscriptionKey = (key) => {
+    this.setState({
+      azMapsKey: key
+    })
+  }
+
+  onChangeAzureMapsDomain = (domain) => {
+    this.setState({
+      azMapsDomain: domain
+    })
+  }
+
+  onSubmitAzureMapsStyleSetList = (e) => {
+    e.preventDefault();
+
+    this.clearError();
+
+    let canceled;
+
+    fetch(azureMapsExt.getStyleSetList(this.state.azMapsDomain), {
+      mode: 'cors',
+      headers: {'subscription-key': this.state.azMapsKey},
+      credentials: "same-origin"
+    })
+    .then(function(response) {
+      return response.json();
+    })
+    .then((body) => {
+      if(canceled) {
+        return;
+      }
+
+      this.setState({
+        activeRequest: null,
+        activeRequestUrl: null
+      });
+
+      const styleSetList = azureMapsExt.ensureStyleSetListValidity(body)
+      console.log('Loaded Azure Maps style set list with ' + styleSetList.styleSets.length + ' entries.')
+
+      this.setState({
+        azMapsStyleSetList: styleSetList.styleSets,
+        azMapsStyleSetName: styleSetList.styleSets.length ? styleSetList.styleSets[0].alias || styleSetList.styleSets[0].styleSetId : ""
+      })
+    })
+    .catch((err) => {
+      this.setState({
+        error: `Failed to load Azure Maps style set list`,
+        activeRequest: null,
+        activeRequestUrl: null
+      })
+      console.error(err)
+      console.warn('Could not fetch the style set list')
+    })
+
+    this.setState({
+      activeRequest: {
+        abort: function() {
+          canceled = true;
+        }
+      },
+      activeRequestUrl: azureMapsExt.getStyleSetList(this.state.azMapsDomain)
+    })
+  }
+
+  onChangeAzureMapsStyleSetName = (styleSetName) => {
+    this.setState({
+      azMapsStyleSetName: styleSetName
+    })
+  }
+
+  onSubmitAzureMapsStyleSet = (e) => {
+    e.preventDefault();
+
+    this.clearError();
+
+    let canceled;
+
+    fetch(azureMapsExt.getStyleSet(this.state.azMapsDomain, this.state.azMapsStyleSetName), {
+      mode: 'cors',
+      headers: {'subscription-key': this.state.azMapsKey},
+      credentials: "same-origin"
+    })
+    .then(function(response) {
+      return response.json();
+    })
+    .then((body) => {
+      if(canceled) {
+        return;
+      }
+
+      this.setState({
+        activeRequest: null,
+        activeRequestUrl: null
+      });
+
+      const styleSet = azureMapsExt.ensureStyleSetValidity(body)
+      console.log('Loaded Azure Maps style set ' + this.state.azMapsStyleSetName + ' with ' + styleSet.styles.length + ' entries.')
+
+      this.setState({
+        azMapsStyleUrl: styleSet.styles.filter(style => style.name === styleSet.defaultStyle)[0].url,
+        azMapsStyleSet: styleSet
+      })
+    })
+    .catch((err) => {
+      this.setState({
+        error: `Failed to load Azure Maps style set`,
+        activeRequest: null,
+        activeRequestUrl: null
+      })
+      console.error(err)
+      console.warn('Could not fetch the style set')
+    })
+
+    this.setState({
+      activeRequest: {
+        abort: function() {
+          canceled = true;
+        }
+      },
+      activeRequestUrl: azureMapsExt.getStyleSet(this.state.azMapsDomain, this.state.azMapsStyleSetName)
+    })
+  }
+
+  onChangeAzureMapsStyleUrl = (styleUrl) => {
+    this.setState({
+      azMapsStyleUrl: styleUrl
+    })
+  }
+
+  onSubmitAzureMapsStyle = (e) => {
+    e.preventDefault();
+
+    this.clearError();
+
+    let canceled;
+
+    fetch(azureMapsExt.getStyleSetStyle(this.state.azMapsStyleUrl), {
+      mode: 'cors',
+      headers: {'subscription-key': this.state.azMapsKey},
+      credentials: "same-origin"
+    })
+    .then(function(response) {
+      return response.json();
+    })
+    .then((body) => {
+      if(canceled) {
+        return;
+      }
+
+      this.setState({
+        activeRequest: null,
+        activeRequestUrl: null
+      });
+
+      const styleSetStyle = azureMapsExt.ensureStyleSetStyleValidity(body, this.state.azMapsDomain)
+      console.log('Loaded Azure Maps style set style ' + styleSetStyle.name + ' with ' + styleSetStyle.layers.length + ' layers.')
+
+      this.props.azureMapsExtension.subscriptionKey = this.state.azMapsKey;
+      this.props.azureMapsExtension.domain = this.state.azMapsDomain;
+      this.props.azureMapsExtension.styleSetList = this.state.azMapsStyleSetList;
+      this.props.azureMapsExtension.styleSetName = this.state.azMapsStyleSetName;
+      this.props.azureMapsExtension.styleUrl = this.state.azMapsStyleUrl;
+      this.props.azureMapsExtension.styleSet = this.state.azMapsStyleSet;
+
+      this.props.onStyleOpen(styleSetStyle)
+      this.onOpenToggle()
+    })
+    .catch((err) => {
+      this.setState({
+        error: `Failed to load Azure Maps style set style`,
+        activeRequest: null,
+        activeRequestUrl: null
+      })
+      console.error(err)
+      console.warn('Could not fetch the style set style')
+    })
+
+    this.setState({
+      activeRequest: {
+        abort: function() {
+          canceled = true;
+        }
+      },
+      activeRequestUrl: azureMapsExt.getStyleSetStyle(this.state.azMapsStyleUrl)
+    })
+  }
+
   render() {
     const styleOptions = publicStyles.map(style => {
       return <PublicStyle
@@ -240,6 +438,93 @@ export default class ModalOpen extends React.Component {
             <div className="maputnik-style-gallery-container">
             {styleOptions}
             </div>
+          </section>
+
+          <section className="maputnik-modal-section">
+            <h1>Azure Maps style sets</h1>
+
+            <form onSubmit={this.onSubmitAzureMapsStyleSetList}>
+              <div className="maputnik-style-gallery-container">
+                <p>
+                  Enter your Azure Maps subscription key.
+                </p>
+                <InputString
+                  aria-label="Azure Maps subscription key for now. RBAC access will be implemented later."
+                  data-wd-key="modal:open.azuremaps.subscription_key"
+                  type="text"
+                  default="Azure Maps subscription key..."
+                  value={this.state.azMapsKey}
+                  onInput={this.onChangeAzureMapsSubscriptionKey}
+                  onChange={this.onChangeAzureMapsSubscriptionKey}
+                />
+
+                <p>
+                  Select domain associated with your subscription key.
+                </p>
+                <InputSelect
+                  aria-label="Azure Maps domain associated with the subscription."
+                  data-wd-key="modal:open.azuremaps.domain" 
+                  options={this.props.azureMapsExtension.domains.map(domain => [domain, domain])}
+                  value={this.state.azMapsDomain}
+                  onChange={this.onChangeAzureMapsDomain}
+                />
+
+                <InputButton
+                  data-wd-key="modal:open.azuremaps.get_style_set_list.button"
+                  type="submit"
+                  className="maputnik-big-button"
+                  disabled={this.state.azMapsKey.length < 1}
+                >Get style set list</InputButton>
+              </div>
+            </form>
+
+            {this.state.azMapsStyleSetName &&
+              <form onSubmit={this.onSubmitAzureMapsStyleSet}>
+                <div className="maputnik-style-gallery-container">
+                  <p>
+                    Select the style set:
+                  </p>
+                  <InputSelect
+                    aria-label="Azure Maps style set list."
+                    data-wd-key="modal:open.azuremaps.style_set_list" 
+                    options={this.state.azMapsStyleSetList.map(styleSet => [styleSet.alias || styleSet.styleSetId, styleSet.alias || styleSet.styleSetId] )}
+                    value={this.state.azMapsStyleSetName}
+                    onChange={this.onChangeAzureMapsStyleSetName}
+                  />
+
+                  <InputButton
+                    data-wd-key="modal:open.azuremaps.load_style_set.button"
+                    type="submit"
+                    className="maputnik-big-button"
+                    disabled={!this.state.azMapsStyleSetName}
+                  >Load style set</InputButton>
+                </div>
+              </form>
+            }
+
+            {this.state.azMapsStyleUrl &&
+              <form onSubmit={this.onSubmitAzureMapsStyle}>
+                <div className="maputnik-style-gallery-container">
+                  <p>
+                    Select the style:
+                  </p>
+                  <InputSelect
+                    aria-label="Azure Maps style set's style list."
+                    data-wd-key="modal:open.azuremaps.style_set_style_list" 
+                    options={this.state.azMapsStyleSet.styles.map(style => [style.url, style.displayName ? style.displayName + " [" + style.name + "]" : style.name ] )}
+                    value={this.state.azMapsStyleUrl}
+                    onChange={this.onChangeAzureMapsStyleUrl}
+                  />
+
+                  <InputButton
+                    data-wd-key="modal:open.azuremaps.load_style_set_style.button"
+                    type="submit"
+                    className="maputnik-big-button"
+                    disabled={!this.state.azMapsStyleUrl}
+                  >Load selected style</InputButton>
+                </div>
+              </form>
+            }
           </section>
         </Modal>
 
