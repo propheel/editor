@@ -60,7 +60,6 @@ class AzureMapsExtension {
 
   constructor() {
     this._subscriptionKey = "";
-    this._subscriptionKeyModified = false;
     this._domain = domains[0];
     this._styleSetList = defaultStyleSetList;
     this._styleSetName = "";
@@ -76,12 +75,7 @@ class AzureMapsExtension {
   get domains() { return domains; }
 
   get subscriptionKey() { return this._subscriptionKey; }
-  set subscriptionKey(newSubscriptionKey) {
-    this._subscriptionKeyModified = (this._subscriptionKey !== newSubscriptionKey);
-    this._subscriptionKey = newSubscriptionKey;
-  }
-
-  get subscriptionKeyModified() { return this._subscriptionKeyModified; }
+  set subscriptionKey(newSubscriptionKey) { this._subscriptionKey = newSubscriptionKey; }
 
   get domain() { return this._domain; }
   set domain(newDomain) { this._domain = newDomain; }
@@ -116,7 +110,6 @@ class AzureMapsExtension {
   }
 
   transformRequest(url, resourceType) {
-    console.log(url + " key: " + this._subscriptionKey);
     return this._styleUrl ? {
       url: this.transformUrl(url),
       headers: {'subscription-key': this._subscriptionKey}
