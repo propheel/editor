@@ -7,6 +7,17 @@ const domains = [
   "eu.t-azmaps.azurelbs.com"
 ];
 
+const indoorLayers = new Set([
+  "facility",
+  "level",
+  "unit",
+  "vertical_penetration",
+  "opening",
+  "structure",
+  "area_element",
+  "line_element",
+  "labels_indoor"]);
+
 function getStyleSetList(domain) { return "https://" + domain + "/styles/styleSets?api-version=" + apiVersion; }
 
 function ensureStyleSetListValidity(styleSetList) {
@@ -32,11 +43,13 @@ function ensureStyleSetValidity(styleSet) {
 function getStyleSetStyle(styleUrl) { return styleUrl + "?api-version=" + apiVersion + "&styleFormat=mapbox"; }
 
 function ensureStyleSetStyleValidity(styleSetStyle, domain) {
-  for(let [key, val] of Object.entries(styleSetStyle.sources)) {
-    if(styleSetStyle.sources.hasOwnProperty(key) && val.hasOwnProperty("url")) {
-      val.url = val.url.replace('{{azMapsDomain}}', domain);
+  styleSetStyle.layers.forEach(layer => {
+    // make sure indoor layers are visible
+    if ((layer.type !== "fill-extrusion") && layer.metadata && indoorLayers.has(layer.metadata["microsoft.maps:layerGroup"]))
+    {
+      layer.layout.visibility = "visible"
     }
-  }
+  })
 
   return styleSetStyle;
 }
