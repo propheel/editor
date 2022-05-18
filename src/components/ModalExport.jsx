@@ -6,10 +6,10 @@ import pkgLockJson from '../../package-lock.json'
 
 import {format} from '@mapbox/mapbox-gl-style-spec'
 import FieldString from './FieldString'
-import FieldCheckbox from './FieldCheckbox'
 import InputButton from './InputButton'
+import ModalLoading from './ModalLoading'
 import Modal from './Modal'
-import {MdFileDownload} from 'react-icons/md'
+import {MdFileDownload, MdCloudUpload} from 'react-icons/md'
 import style from '../libs/style'
 import fieldSpecAdditional from '../libs/field-spec-additional'
 
@@ -23,10 +23,15 @@ export default class ModalExport extends React.Component {
     onStyleChanged: PropTypes.func.isRequired,
     isOpen: PropTypes.bool.isRequired,
     onOpenToggle: PropTypes.func.isRequired,
+    azureMapsExtension: PropTypes.object.isRequired,
   }
 
   constructor(props) {
     super(props);
+    this.state = {
+      azMapsResultingStyleDescription: props.azureMapsExtension.resultingStyleDescription,
+      azMapsResultingStyleAlias: props.azureMapsExtension.resultingStyleAlias
+    }
   }
 
   tokenizedStyle () {
@@ -102,61 +107,139 @@ export default class ModalExport extends React.Component {
     this.props.onStyleChanged(changedStyle)
   }
 
+  onChangeAzureMapsResultingStyleDescription = (styleDescription) => {
+    this.setState({
+      azMapsResultingStyleDescription: styleDescription
+    })
+  }
+
+  onChangeAzureMapsResultingStyleAlias = (styleAlias) => {
+    this.setState({
+      azMapsResultingStyleAlias: styleAlias
+    })
+  }
+
+  downloadAzureMapsStyle() {
+    this.props.azureMapsExtension.getUpdatedStyle()
+    .then((zipBlob) => {
+      saveAs(zipBlob, "azureMapsStyle.zip");
+    })
+  }
+
+  uploadAzureMapsStyle() {
+    this.props.azureMapsExtension.uploadResultingStyle(this.state.azMapsResultingStyleDescription, this.state.azMapsResultingStyleAlias);
+  }
+
 
   render() {
-    return <Modal
-      data-wd-key="modal:export"
-      isOpen={this.props.isOpen}
-      onOpenToggle={this.props.onOpenToggle}
-      title={'Export Style'}
-      className="maputnik-export-modal"
-    >
+    return (
+      <div>
+        <Modal
+          data-wd-key="modal:export"
+          isOpen={this.props.isOpen}
+          onOpenToggle={this.props.onOpenToggle}
+          title={'Export Style'}
+          className="maputnik-export-modal"
+        >
 
-      <section className="maputnik-modal-section">
-        <h1>Download Style</h1>
-        <p>
-          Download a JSON style to your computer.
-        </p>
+          <section className="maputnik-modal-section">
+            <h1>Download Style</h1>
+            <p>
+              Download a JSON style to your computer.
+            </p>
 
-        <div>
-          <FieldString
-            label={fieldSpecAdditional.maputnik.mapbox_access_token.label}
-            fieldSpec={fieldSpecAdditional.maputnik.mapbox_access_token}
-            value={(this.props.mapStyle.metadata || {})['maputnik:mapbox_access_token']}
-            onChange={this.changeMetadataProperty.bind(this, "maputnik:mapbox_access_token")}
-          />
-          <FieldString
-            label={fieldSpecAdditional.maputnik.maptiler_access_token.label}
-            fieldSpec={fieldSpecAdditional.maputnik.maptiler_access_token}
-            value={(this.props.mapStyle.metadata || {})['maputnik:openmaptiles_access_token']}
-            onChange={this.changeMetadataProperty.bind(this, "maputnik:openmaptiles_access_token")}
-          />
-          <FieldString
-            label={fieldSpecAdditional.maputnik.thunderforest_access_token.label}
-            fieldSpec={fieldSpecAdditional.maputnik.thunderforest_access_token}
-            value={(this.props.mapStyle.metadata || {})['maputnik:thunderforest_access_token']}
-            onChange={this.changeMetadataProperty.bind(this, "maputnik:thunderforest_access_token")}
-          />
-        </div>
+            <div>
+              <FieldString
+                label={fieldSpecAdditional.maputnik.mapbox_access_token.label}
+                fieldSpec={fieldSpecAdditional.maputnik.mapbox_access_token}
+                value={(this.props.mapStyle.metadata || {})['maputnik:mapbox_access_token']}
+                onChange={this.changeMetadataProperty.bind(this, "maputnik:mapbox_access_token")}
+              />
+              <FieldString
+                label={fieldSpecAdditional.maputnik.maptiler_access_token.label}
+                fieldSpec={fieldSpecAdditional.maputnik.maptiler_access_token}
+                value={(this.props.mapStyle.metadata || {})['maputnik:openmaptiles_access_token']}
+                onChange={this.changeMetadataProperty.bind(this, "maputnik:openmaptiles_access_token")}
+              />
+              <FieldString
+                label={fieldSpecAdditional.maputnik.thunderforest_access_token.label}
+                fieldSpec={fieldSpecAdditional.maputnik.thunderforest_access_token}
+                value={(this.props.mapStyle.metadata || {})['maputnik:thunderforest_access_token']}
+                onChange={this.changeMetadataProperty.bind(this, "maputnik:thunderforest_access_token")}
+              />
+            </div>
 
-        <div className="maputnik-modal-export-buttons">
-          <InputButton
-            onClick={this.downloadStyle.bind(this)}
-          >
-            <MdFileDownload />
-            Download Style
-          </InputButton>
+            <div className="maputnik-modal-export-buttons">
+              <InputButton
+                onClick={this.downloadStyle.bind(this)}
+              >
+                <MdFileDownload />
+                Download Style
+              </InputButton>
 
-          <InputButton
-            onClick={this.downloadHtml.bind(this)}
-          >
-            <MdFileDownload />
-            Download HTML
-          </InputButton>
-        </div>
-      </section>
+              <InputButton
+                onClick={this.downloadHtml.bind(this)}
+              >
+                <MdFileDownload />
+                Download HTML
+              </InputButton>
+            </div>
+          </section>
 
-    </Modal>
+          <section className="maputnik-modal-section">
+            <h1>Azure Maps Style</h1>
+
+            <p>
+              Download current style to your local machine.
+            </p>
+
+            <div className="maputnik-modal-export-buttons">
+              <InputButton
+                onClick={this.downloadAzureMapsStyle.bind(this)}
+              >
+                <MdFileDownload />
+                Download Style
+              </InputButton>
+            </div>
+
+            <p>
+              Upload current style to your Creator's account.
+            </p>
+
+            <div>
+              <FieldString
+                label="Style description"
+                fieldSpec={fieldSpecAdditional.maputnik.mapbox_access_token}
+                value={this.state.azMapsResultingStyleDescription}
+                onChange={this.onChangeAzureMapsResultingStyleDescription}
+              />
+              <FieldString
+                label="Style alias"
+                fieldSpec={fieldSpecAdditional.maputnik.maptiler_access_token}
+                value={this.state.azMapsResultingStyleAlias}
+                onChange={this.onChangeAzureMapsResultingStyleAlias}
+              />
+            </div>
+
+            <div className="maputnik-modal-export-buttons">
+              <InputButton
+                onClick={this.uploadAzureMapsStyle.bind(this)}
+              >
+                <MdCloudUpload />
+                Upload Style
+              </InputButton>
+            </div>
+          </section>
+        </Modal>
+
+        <ModalLoading
+          isOpen={!!this.state.activeRequest}
+          title={'Loading style'}
+          onCancel={(e) => this.onCancelActiveRequest(e)}
+          message={"Loading: "+this.state.activeRequestUrl}
+        />
+      </div>
+    )
   }
 }
 

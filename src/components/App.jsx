@@ -928,6 +928,7 @@ export default class App extends React.Component {
         onStyleChanged={this.onStyleChanged}
         isOpen={this.state.isOpen.export}
         onOpenToggle={this.toggleModal.bind(this, 'export')}
+        azureMapsExtension={this.state.azureMapsExtension}
       />
       <ModalOpen
         isOpen={this.state.isOpen.open}

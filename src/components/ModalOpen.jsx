@@ -14,6 +14,7 @@ import {MdAddCircleOutline} from 'react-icons/md'
 import style from '../libs/style.js'
 import publicStyles from '../config/styles.json'
 import azureMapsExt from '../libs/azure-maps-ext'
+import JSZip from 'jszip'
 
 class PublicStyle extends React.Component {
   static propTypes = {
@@ -63,7 +64,8 @@ export default class ModalOpen extends React.Component {
       azMapsStyleSetList: props.azureMapsExtension.styleSetList.styleSets,
       azMapsStyleSetName: props.azureMapsExtension.styleSetName,
       azMapsStyleSet: props.azureMapsExtension.styleSet,
-      azMapsStyleUrl: props.azureMapsExtension.styleUrl
+      azMapsStyleTuples: props.azureMapsExtension.styleTuples,
+      azMapsResultingStyleName: props.azureMapsExtension.resultingStyleName
     };
   }
 
@@ -91,7 +93,7 @@ export default class ModalOpen extends React.Component {
 
     let canceled;
 
-    const activeRequest = fetch(styleUrl, {
+    fetch(styleUrl, {
       mode: 'cors',
       credentials: "same-origin"
     })
@@ -196,7 +198,7 @@ export default class ModalOpen extends React.Component {
 
     let canceled;
 
-    fetch(azureMapsExt.getStyleSetList(this.state.azMapsDomain), {
+    fetch(azureMapsExt.listStyleSets(this.state.azMapsDomain), {
       mode: 'cors',
       headers: {'subscription-key': this.state.azMapsKey},
       credentials: "same-origin"
@@ -238,7 +240,7 @@ export default class ModalOpen extends React.Component {
           canceled = true;
         }
       },
-      activeRequestUrl: azureMapsExt.getStyleSetList(this.state.azMapsDomain)
+      activeRequestUrl: azureMapsExt.listStyleSets(this.state.azMapsDomain)
     })
   }
 
@@ -261,25 +263,40 @@ export default class ModalOpen extends React.Component {
       credentials: "same-origin"
     })
     .then(function(response) {
-      return response.json();
-    })
-    .then((body) => {
-      if(canceled) {
-        return;
+      if (response.status === 200 || response.status === 0) {
+        return Promise.resolve(response.blob());
+      } else {
+        return Promise.reject(new Error(response.statusText));
       }
+    })
+    .then(JSZip.loadAsync)
+    .then((zip) => {
+      for (const zipEntry in zip.files) {
+        if (zipEntry.toLowerCase().endsWith(".json")) {
+          zip.file(zipEntry).async("string").then((styleSetBody) => {
+            const styleSet = azureMapsExt.ensureStyleSetValidity(JSON.parse(styleSetBody));
 
-      this.setState({
-        activeRequest: null,
-        activeRequestUrl: null
-      });
+            if(canceled) {
+              return;
+            }
 
-      const styleSet = azureMapsExt.ensureStyleSetValidity(body)
-      console.log('Loaded Azure Maps style set ' + this.state.azMapsStyleSetName + ' with ' + styleSet.styles.length + ' entries.')
+            this.setState({
+              activeRequest: null,
+              activeRequestUrl: null
+            });
 
-      this.setState({
-        azMapsStyleUrl: styleSet.styles.filter(style => style.name === styleSet.defaultStyle)[0].url,
-        azMapsStyleSet: styleSet
-      })
+            console.log('Loaded Azure Maps style set ' + this.state.azMapsStyleSetName + ' with ' + styleSet.styles.length + ' entries.')
+
+            const styleTuples = azureMapsExt.extractStyleTuples(styleSet);
+
+            this.setState({
+              azMapsStyleSet: styleSet,
+              azMapsStyleTuples: styleTuples,
+              azMapsResultingStyleName: (styleTuples.length) ? styleTuples[0] : ""
+            })
+          })
+        }
+      }
     })
     .catch((err) => {
       this.setState({
@@ -301,9 +318,9 @@ export default class ModalOpen extends React.Component {
     })
   }
 
-  onChangeAzureMapsStyleUrl = (styleUrl) => {
+  onChangeAzureMapsResultingStyleName = (resultingStyleName) => {
     this.setState({
-      azMapsStyleUrl: styleUrl
+      azMapsResultingStyleName: resultingStyleName
     })
   }
 
@@ -314,15 +331,16 @@ export default class ModalOpen extends React.Component {
 
     let canceled;
 
-    fetch(azureMapsExt.getStyleSetStyle(this.state.azMapsStyleUrl), {
-      mode: 'cors',
-      headers: {'subscription-key': this.state.azMapsKey},
-      credentials: "same-origin"
-    })
-    .then(function(response) {
-      return response.json();
-    })
-    .then((body) => {
+    console.log('Loading Azure Maps resulting style: ' + this.state.azMapsResultingStyleName)
+
+    this.props.azureMapsExtension.subscriptionKey = this.state.azMapsKey;
+    this.props.azureMapsExtension.domain = this.state.azMapsDomain;
+    this.props.azureMapsExtension.styleSetList = this.state.azMapsStyleSetList;
+    this.props.azureMapsExtension.styleSetName = this.state.azMapsStyleSetName;
+    this.props.azureMapsExtension.styleSet = this.state.azMapsStyleSet;
+
+    this.props.azureMapsExtension.createResultingStyle(this.state.azMapsResultingStyleName, canceled)
+    .then((resultingStyle) => {
       if(canceled) {
         return;
       }
@@ -331,28 +349,18 @@ export default class ModalOpen extends React.Component {
         activeRequest: null,
         activeRequestUrl: null
       });
-
-      const styleSetStyle = azureMapsExt.ensureStyleSetStyleValidity(body, this.state.azMapsDomain)
-      console.log('Loaded Azure Maps style set style ' + styleSetStyle.name + ' with ' + styleSetStyle.layers.length + ' layers.')
-
-      this.props.azureMapsExtension.subscriptionKey = this.state.azMapsKey;
-      this.props.azureMapsExtension.domain = this.state.azMapsDomain;
-      this.props.azureMapsExtension.styleSetList = this.state.azMapsStyleSetList;
-      this.props.azureMapsExtension.styleSetName = this.state.azMapsStyleSetName;
-      this.props.azureMapsExtension.styleUrl = this.state.azMapsStyleUrl;
-      this.props.azureMapsExtension.styleSet = this.state.azMapsStyleSet;
-
-      this.props.onStyleOpen(styleSetStyle)
+      
+      this.props.onStyleOpen(resultingStyle)
       this.onOpenToggle()
     })
     .catch((err) => {
       this.setState({
-        error: `Failed to load Azure Maps style set style`,
+        error: `Failed to load Azure Maps style`,
         activeRequest: null,
         activeRequestUrl: null
       })
       console.error(err)
-      console.warn('Could not fetch the style set style')
+      console.warn('Could not fetch the style')
     })
 
     this.setState({
@@ -361,7 +369,7 @@ export default class ModalOpen extends React.Component {
           canceled = true;
         }
       },
-      activeRequestUrl: azureMapsExt.getStyleSetStyle(this.state.azMapsStyleUrl)
+      activeRequestUrl: "Azure Maps Style elements"
     })
   }
 
@@ -386,7 +394,7 @@ export default class ModalOpen extends React.Component {
       );
     }
 
-    return  (
+    return (
       <div>
         <Modal
           data-wd-key="modal:open"
@@ -502,7 +510,7 @@ export default class ModalOpen extends React.Component {
               </form>
             }
 
-            {this.state.azMapsStyleUrl &&
+            {this.state.azMapsResultingStyleName &&
               <form onSubmit={this.onSubmitAzureMapsStyle}>
                 <div className="maputnik-style-gallery-container">
                   <p>
@@ -511,16 +519,16 @@ export default class ModalOpen extends React.Component {
                   <InputSelect
                     aria-label="Azure Maps style set's style list."
                     data-wd-key="modal:open.azuremaps.style_set_style_list" 
-                    options={this.state.azMapsStyleSet.styles.map(style => [style.url, style.displayName ? style.displayName + " [" + style.name + "]" : style.name ] )}
-                    value={this.state.azMapsStyleUrl}
-                    onChange={this.onChangeAzureMapsStyleUrl}
+                    options={this.state.azMapsStyleTuples.map(styleTuple => [styleTuple, styleTuple] )}
+                    value={this.state.azMapsResultingStyleName}
+                    onChange={this.onChangeAzureMapsResultingStyleName}
                   />
 
                   <InputButton
                     data-wd-key="modal:open.azuremaps.load_style_set_style.button"
                     type="submit"
                     className="maputnik-big-button"
-                    disabled={!this.state.azMapsStyleUrl}
+                    disabled={!this.state.azMapsResultingStyleName}
                   >Load selected style</InputButton>
                 </div>
               </form>
