@@ -127,9 +127,38 @@ export default class ModalExport extends React.Component {
   }
 
   uploadAzureMapsStyle() {
-    this.props.azureMapsExtension.uploadResultingStyle(this.state.azMapsResultingStyleDescription, this.state.azMapsResultingStyleAlias);
+    this.props.azureMapsExtension.uploadResultingStyle(this.state.azMapsResultingStyleDescription, this.state.azMapsResultingStyleAlias)
+    .then((uploadedStyleUrl) => {
+      this.setState({
+        activeRequest: { abort: () => { } },
+        activeRequestMessage: "Success! The uploaded style is accessible here: " + uploadedStyleUrl
+      });
+    })
+    .catch((err) => {
+      this.setState({
+        activeRequest: { abort: () => { } },
+        activeRequestMessage: "Failed uploading the style"
+      });
+      console.error(err);
+    })
+
+    this.setState({
+      activeRequest: { abort: () => { } },
+      activeRequestMessage: "Uploading Azure Maps Style..."
+    });
   }
 
+  onCancelActiveRequest(e) {
+    if(e) e.stopPropagation();
+
+    if(this.state.activeRequest) {
+      this.state.activeRequest.abort();
+      this.setState({
+        activeRequest: null,
+        activeRequestMessage: null
+      });
+    }
+  }
 
   render() {
     return (
@@ -234,9 +263,9 @@ export default class ModalExport extends React.Component {
 
         <ModalLoading
           isOpen={!!this.state.activeRequest}
-          title={'Loading style'}
+          title={'Uploading style'}
           onCancel={(e) => this.onCancelActiveRequest(e)}
-          message={"Loading: "+this.state.activeRequestUrl}
+          message={this.state.activeRequestMessage}
         />
       </div>
     )

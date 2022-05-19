@@ -449,7 +449,7 @@ export default class ModalOpen extends React.Component {
           </section>
 
           <section className="maputnik-modal-section">
-            <h1>Azure Maps style sets</h1>
+            <h1>Azure Maps styles</h1>
 
             <form onSubmit={this.onSubmitAzureMapsStyleSetList}>
               <div className="maputnik-style-gallery-container">
