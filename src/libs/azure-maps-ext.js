@@ -1,5 +1,4 @@
 import JSZip from 'jszip'
-import pako from 'pako'
 
 const apiVersion = "2022-01-01-preview";
 
@@ -75,7 +74,6 @@ class AzureMapsStyleRecipe {
     this._zip = null;
     this._json = null;
     this._jsonFileName = "";
-    this._spriteJsonFiles = {};
   }
 
   get layers() { return this._json?.layers; }
@@ -104,22 +102,11 @@ class AzureMapsStyleRecipe {
     // load style recipe
     this._jsonFileName = jsons.values().next().value + ".json";
     this._json = JSON.parse(await this._zip.file(this._jsonFileName).async("string"));
-
-    // WORKAROUND - incorrectly GZipped sprite index files ... :/
-    for (const imageName of pngs) {
-      const spriteIndexFileName = imageName + ".json";
-      this._spriteJsonFiles[spriteIndexFileName] = pako.inflate(await this._zip.file(spriteIndexFileName).async("Uint8Array"));
-    }
-    console.log(this._spriteJsonFiles);
   }
 
   updateAndGenerateZip(styleRecipeJson)
   {
     this._zip.file(this._jsonFileName, styleRecipeJson);
-    // WORKAROUND - incorrectly GZipped sprite index files ... :/
-    for (const spriteIndexFileName in this._spriteJsonFiles) {
-      this._zip.file(spriteIndexFileName, this._spriteJsonFiles[spriteIndexFileName]);
-    }
     return this._zip.generateAsync({type: "blob"});
   }
 }
@@ -213,7 +200,6 @@ class AzureMapsExtension {
   get requestHeaders() { return this._resultingStyle ? { 'subscription-key': this._subscriptionKey } : {}; }
 
   transformUrl(url) {
-    console.log(url);
     if (this._resultingStyle && url)
     {
       let newUrl = url.replace('{{azMapsDomain}}', this._domain).replace('{{azMapsLanguage}}', this._language).replace('{{azMapsView}}', this._view);
@@ -253,8 +239,6 @@ class AzureMapsExtension {
       return this._resultingStyle;
     }
 
-    console.log(styleTuple);
-
     const styleRecipeName = styleTuple[0];
     var styleRecipeResponse = await fetch(getStyleRecipe(this._domain, styleRecipeName), {
       mode: 'cors',
@@ -264,8 +248,6 @@ class AzureMapsExtension {
     this._styleRecipe = new AzureMapsStyleRecipe();
     await this._styleRecipe.load(await styleRecipeResponse.blob());
 
-    console.log(this._styleRecipe);
-
     const tilesetName = styleTuple[1];
     var tilesetMetadataResponse = await fetch(getTilesetMetadata(this._domain, tilesetName), {
       mode: 'cors',
@@ -273,8 +255,6 @@ class AzureMapsExtension {
       credentials: "same-origin"
     });
     this._tilesetMetadata = new AzureMapsTilesetMetadata(await tilesetMetadataResponse.json());
-
-    console.log(this._tilesetMetadata);
 
     // Get alias and description
     var styleRecipesResponse = await fetch(listStyleRecipes(this._domain), {
