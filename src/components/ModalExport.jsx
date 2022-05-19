@@ -30,7 +30,8 @@ export default class ModalExport extends React.Component {
     super(props);
     this.state = {
       azMapsResultingStyleDescription: props.azureMapsExtension.resultingStyleDescription,
-      azMapsResultingStyleAlias: props.azureMapsExtension.resultingStyleAlias
+      azMapsResultingStyleAlias: props.azureMapsExtension.resultingStyleAlias,
+      activeRequestMessage: ""
     }
   }
 
@@ -155,7 +156,7 @@ export default class ModalExport extends React.Component {
       this.state.activeRequest.abort();
       this.setState({
         activeRequest: null,
-        activeRequestMessage: null
+        activeRequestMessage: ""
       });
     }
   }

@@ -20,6 +20,8 @@ const indoorLayers = new Set([
   "line_element",
   "labels_indoor"]);
 
+const fakeDomainForSprite = "https://fake.domain.com/for/sprite";
+
 // Azure Maps REST API URLs:
 function getTilesetMetadata(domain, tilesetId) { return "https://" + domain + "/tilesets/" + tilesetId + "?api-version=" + apiVersion; }
 function createStyleRecipe(domain, dataFormat, description, alias) { return "https://" + domain + "/styles/styleRecipes?api-version=" + apiVersion + "&dataFormat=" + dataFormat + "&styleFormat=azureMapsStyle&description=" + description + "&alias=" + alias; }
@@ -74,6 +76,7 @@ class AzureMapsStyleRecipe {
     this._zip = null;
     this._json = null;
     this._jsonFileName = "";
+    this._spriteSheets = {};
   }
 
   get layers() { return this._json?.layers; }
@@ -99,9 +102,31 @@ class AzureMapsStyleRecipe {
       return;
     }
 
+    // Load sprite sheets into memory
+    for (const imageName of pngs) {
+      const pixelRatio = imageName.endsWith("@2x") ? "2" : "1";
+      this._spriteSheets[pixelRatio + ".json"] = URL.createObjectURL(await this._zip.file(imageName + ".json").async("blob"));
+      this._spriteSheets[pixelRatio + ".png"] = URL.createObjectURL(await this._zip.file(imageName + ".png").async("blob"));
+    }
+
     // load style recipe
     this._jsonFileName = jsons.values().next().value + ".json";
     this._json = JSON.parse(await this._zip.file(this._jsonFileName).async("string"));
+  }
+
+  getSpriteUrl(spriteUrl) {
+    switch (spriteUrl) {
+      case fakeDomainForSprite + ".json":
+      case fakeDomainForSprite + "@1x.json":
+        return this._spriteSheets["1.json"];
+      case fakeDomainForSprite + ".png":
+      case fakeDomainForSprite + "@1x.png":
+        return this._spriteSheets["1.png"];
+      case fakeDomainForSprite + "@2x.json":
+        return this._spriteSheets["2.json"];
+      case fakeDomainForSprite + "@2x.png":
+        return this._spriteSheets["2.png"];
+    }
   }
 
   updateAndGenerateZip(styleRecipeJson)
@@ -202,6 +227,9 @@ class AzureMapsExtension {
   transformUrl(url) {
     if (this._resultingStyle && url)
     {
+      if (url.startsWith(fakeDomainForSprite)) {
+        return this._styleRecipe.getSpriteUrl(url);
+      }
       let newUrl = url.replace('{{azMapsDomain}}', this._domain).replace('{{azMapsLanguage}}', this._language).replace('{{azMapsView}}', this._view);
       if (!newUrl.includes("api-version")) {
         newUrl = newUrl + "?api-version=" + apiVersion;
@@ -230,6 +258,7 @@ class AzureMapsExtension {
       "name": resultingStyleName,
       "metadata": {},
       "sources": {},
+      "sprite": fakeDomainForSprite,
       "glyphs": "https://" + this._domain + "/styles/glyphs/{fontstack}/{range}.pbf",
       "layers": []
     };
