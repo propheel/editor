@@ -83,10 +83,10 @@ export class StyleStore {
 
   // Save current style replacing previous version
   save(mapStyle) {
-    mapStyle = style.ensureStyleValidity(mapStyle)
+    /* mapStyle = style.ensureStyleValidity(mapStyle)
     const key = styleKey(mapStyle.id)
     window.localStorage.setItem(key, JSON.stringify(mapStyle))
-    window.localStorage.setItem(storageKeys.latest, mapStyle.id)
+    window.localStorage.setItem(storageKeys.latest, mapStyle.id) */
     return mapStyle
   }
 }

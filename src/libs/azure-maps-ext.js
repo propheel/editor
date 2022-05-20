@@ -32,42 +32,21 @@ function getStyleSet(domain, styleSetName) { return "https://" + domain + "/styl
 function getStyleSetStyle(styleUrl) { return styleUrl + "?api-version=" + apiVersion + "&styleFormat=mapbox"; }
 
 function ensureStyleSetListValidity(styleSetList) {
-  return {
-    styleSets: [
-      {
-        "styleSetId": "0a1a2bce-554c-a941-e0eb-5709b6168584",
-        "description": "The default Azure Maps style set",
-        "alias": "microsoft-maps:default",
-        "created": "2022-03-24T13:07:39+00:00"
-      },
-      ...styleSetList.styleSets
-    ]
-  };
+  return styleSetList;
 }
 
 function ensureStyleSetValidity(styleSet) {
   return styleSet;
 }
 
-function ensureStyleSetStyleValidity(styleSetStyle, domain) {
-  styleSetStyle.layers.forEach(layer => {
-    // make sure indoor layers are visible
-    if ((layer.type !== "fill-extrusion") && layer.metadata && indoorLayers.has(layer.metadata["microsoft.maps:layerGroup"]))
-    {
-      layer.layout.visibility = "visible"
-    }
-  })
-  return styleSetStyle;
-}
-
 function extractStyleTuples(styleSet) {
-  var styleTuples = [];
+  var styleTuples = new Set();
   for (const style of styleSet.styles) {
     for (const tuple of style.layers) {
-      styleTuples.push(tuple.styleRecipeId + " + " + tuple.tilesetId);
+      styleTuples.add(tuple.styleRecipeId + " + " + tuple.tilesetId);
     }
   }
-  return styleTuples;
+  return Array.from(styleTuples);
 }
 
 class AzureMapsStyleRecipe {
@@ -391,7 +370,6 @@ export default {
   getStyleSetStyle,
   ensureStyleSetListValidity,
   ensureStyleSetValidity,
-  ensureStyleSetStyleValidity,
   extractStyleTuples,
   AzureMapsExtension
 }
