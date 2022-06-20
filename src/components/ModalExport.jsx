@@ -121,14 +121,14 @@ export default class ModalExport extends React.Component {
   }
 
   downloadAzureMapsStyle() {
-    this.props.azureMapsExtension.getUpdatedStyle()
+    this.props.azureMapsExtension.getUpdatedStyle(this.props.mapStyle)
     .then((zipBlob) => {
       saveAs(zipBlob, "azureMapsStyle.zip");
     })
   }
 
   uploadAzureMapsStyle() {
-    this.props.azureMapsExtension.uploadResultingStyle(this.state.azMapsResultingStyleDescription, this.state.azMapsResultingStyleAlias)
+    this.props.azureMapsExtension.uploadResultingStyle(this.props.mapStyle, this.state.azMapsResultingStyleDescription, this.state.azMapsResultingStyleAlias)
     .then((uploadedStyleUrl) => {
       this.setState({
         activeRequest: { abort: () => { } },

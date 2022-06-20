@@ -95,6 +95,11 @@ export default class MapMapboxGl extends React.Component {
       this.props.replaceAccessTokens(props.mapStyle),
       {diff: true}
     )
+
+    let target = {};
+    if (props.mapStyle.center) target.center = props.mapStyle.center;
+    if (props.mapStyle.zoom) target.zoom = props.mapStyle.zoom;
+    if (props.mapStyle.center || props.mapStyle.zoom) this.state.map.easeTo(target);
   }
 
   shouldComponentUpdate(nextProps, nextState) {

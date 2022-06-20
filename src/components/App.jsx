@@ -494,7 +494,7 @@ export default class App extends React.Component {
     }
 
     layers = layers.slice(0);
-    layers = arrayMoveMutable(layers, oldIndex, newIndex);
+    arrayMoveMutable(layers, oldIndex, newIndex);
     this.onLayersChange(layers);
   }
 
@@ -577,6 +577,9 @@ export default class App extends React.Component {
   }
 
   openStyle = (styleObj) => {
+    if (styleObj.metadata?.type != "Azure Maps style") {
+      this.state.azureMapsExtension.resultingStyle = null;
+    }
     styleObj = this.setDefaultValues(styleObj)
     this.onStyleChanged(styleObj)
   }

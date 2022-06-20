@@ -24,12 +24,11 @@ const fakeDomainForSprite = "https://fake.domain.com/for/sprite";
 
 // Azure Maps REST API URLs:
 function getTilesetMetadata(domain, tilesetId) { return "https://" + domain + "/tilesets/" + tilesetId + "?api-version=" + apiVersion; }
-function createStyleRecipe(domain, dataFormat, description, alias) { return "https://" + domain + "/styles/styleRecipes?api-version=" + apiVersion + "&dataFormat=" + dataFormat + "&styleFormat=azureMapsStyle&description=" + description + "&alias=" + alias; }
-function listStyleRecipes(domain) { return "https://" + domain + "/styles/styleRecipes?api-version=" + apiVersion; }
-function getStyleRecipe(domain, styleRecipeName) { return "https://" + domain + "/styles/styleRecipes/" + styleRecipeName + "?api-version=" + apiVersion + "&styleFormat=azureMapsStyle"; }
-function listStyleSets(domain) { return "https://" + domain + "/styles/styleSets?api-version=" + apiVersion; }
-function getStyleSet(domain, styleSetName) { return "https://" + domain + "/styles/styleSets/" + styleSetName + "?api-version=" + apiVersion; }
-function getStyleSetStyle(styleUrl) { return styleUrl + "?api-version=" + apiVersion + "&styleFormat=mapbox"; }
+function createStyleRecipe(domain, dataFormat, description, alias) { return "https://" + domain + "/styles?api-version=" + apiVersion + "&dataFormat=" + dataFormat + "&styleFormat=azureMapsStyle&description=" + description + "&alias=" + alias; }
+function listStyleRecipes(domain) { return "https://" + domain + "/styles?api-version=" + apiVersion; }
+function getStyleRecipe(domain, styleRecipeName) { return "https://" + domain + "/styles/" + styleRecipeName + "?api-version=" + apiVersion + "&styleFormat=azureMapsStyle"; }
+function listStyleSets(domain) { return "https://" + domain + "/styles/mapConfigurations?api-version=" + apiVersion; }
+function getStyleSet(domain, styleSetName) { return "https://" + domain + "/styles/mapConfigurations/" + styleSetName + "?api-version=" + apiVersion; }
 
 function ensureStyleSetListValidity(styleSetList) {
   return styleSetList;
@@ -43,7 +42,7 @@ function extractStyleTuples(styleSet) {
   var styleTuples = new Set();
   for (const style of styleSet.styles) {
     for (const tuple of style.layers) {
-      styleTuples.add(tuple.styleRecipeId + " + " + tuple.tilesetId);
+      styleTuples.add(tuple.styleId + " + " + tuple.tilesetId);
     }
   }
   return Array.from(styleTuples);
@@ -196,6 +195,7 @@ class AzureMapsExtension {
   get resultingStyleName() { return this._resultingStyleName; }
 
   get resultingStyle() { return this._resultingStyle; }
+  set resultingStyle(newResultingStyle) { this._resultingStyle = newResultingStyle; }
 
   get resultingStyleDescription() { return this._resultingStyleDescription; }
 
@@ -209,7 +209,7 @@ class AzureMapsExtension {
       if (url.startsWith(fakeDomainForSprite)) {
         return this._styleRecipe.getSpriteUrl(url);
       }
-      let newUrl = url.replace('{{azMapsDomain}}', this._domain).replace('{{azMapsLanguage}}', this._language).replace('{{azMapsView}}', this._view);
+      let newUrl = url.replace('{{azMapsDomain}}', this._domain).replace('{{azMapsLanguage}}', this._language).replace('{{azMapsView}}', this._view).replace('styles/styleSets', 'styles/mapConfigurations');
       if (!newUrl.includes("api-version")) {
         newUrl = newUrl + "?api-version=" + apiVersion;
       }
@@ -230,63 +230,87 @@ class AzureMapsExtension {
     }
   }
 
-  async createResultingStyle(resultingStyleName) {
-    this._resultingStyleName = resultingStyleName;
-    this._resultingStyle = {
+  async createResultingStyle(
+    subscriptionKey,
+    domain,
+    styleSetList,
+    styleSetName,
+    styleSet,
+    resultingStyleName,
+    errorResponseJsonPromise,
+    canceled) {
+    let resultingStyle = {
       "version": 8,
       "name": resultingStyleName,
-      "metadata": {},
+      "metadata": {
+        "type": "Azure Maps style"
+      },
       "sources": {},
       "sprite": fakeDomainForSprite,
-      "glyphs": "https://" + this._domain + "/styles/glyphs/{fontstack}/{range}.pbf",
+      "glyphs": "https://" + domain + "/styles/glyphs/{fontstack}/{range}.pbf",
       "layers": []
     };
 
     const styleTuple = resultingStyleName.split(" + ");
     if (styleTuple.length != 2) {
-      return this._resultingStyle;
+      throw new Error('Got invalid resulting style name: ' + resultingStyleName);
     }
 
     const styleRecipeName = styleTuple[0];
-    var styleRecipeResponse = await fetch(getStyleRecipe(this._domain, styleRecipeName), {
+    let styleRecipeResponse = await fetch(getStyleRecipe(domain, styleRecipeName), {
       mode: 'cors',
-      headers: {'subscription-key': this._subscriptionKey},
+      headers: {'subscription-key': subscriptionKey},
       credentials: "same-origin"
     });
-    this._styleRecipe = new AzureMapsStyleRecipe();
-    await this._styleRecipe.load(await styleRecipeResponse.blob());
+    if (canceled) return null;
+    if (!styleRecipeResponse.ok) {
+      errorResponseJsonPromise = styleRecipeResponse.json();
+      throw new Error('Response is not OK');
+    }
+    let styleRecipe = new AzureMapsStyleRecipe();
+    await styleRecipe.load(await styleRecipeResponse.blob());
 
     const tilesetName = styleTuple[1];
-    var tilesetMetadataResponse = await fetch(getTilesetMetadata(this._domain, tilesetName), {
+    let tilesetMetadataResponse = await fetch(getTilesetMetadata(domain, tilesetName), {
       mode: 'cors',
-      headers: {'subscription-key': this._subscriptionKey},
+      headers: {'subscription-key': subscriptionKey},
       credentials: "same-origin"
     });
-    this._tilesetMetadata = new AzureMapsTilesetMetadata(await tilesetMetadataResponse.json());
+    if (canceled) return null;
+    if (!tilesetMetadataResponse.ok) {
+      errorResponseJsonPromise = tilesetMetadataResponse.json();
+      throw new Error('Response is not OK');
+    }
+    let tilesetMetadata = new AzureMapsTilesetMetadata(await tilesetMetadataResponse.json());
 
     // Get alias and description
-    var styleRecipesResponse = await fetch(listStyleRecipes(this._domain), {
+    var styleRecipesResponse = await fetch(listStyleRecipes(domain), {
       mode: 'cors',
-      headers: {'subscription-key': this._subscriptionKey},
+      headers: {'subscription-key': subscriptionKey},
       credentials: "same-origin"
     });
-    for (const styleRecipeMetadata of (await styleRecipesResponse.json()).styleRecipes) {
-      if (styleRecipeMetadata.styleRecipeId === styleRecipeName || styleRecipeMetadata.alias === styleRecipeName)
+    if (canceled) return null;
+    if (!styleRecipesResponse.ok) {
+      errorResponseJsonPromise = styleRecipesResponse.json();
+      throw new Error('Response is not OK');
+    }
+    for (const styleRecipeMetadata of (await styleRecipesResponse.json()).styles) {
+      if (styleRecipeMetadata.styleId === styleRecipeName || styleRecipeMetadata.alias === styleRecipeName)
       {
-        this._resultingStyleDescription = styleRecipeMetadata.description;
-        this._resultingStyleAlias = styleRecipeMetadata.alias;
+        resultingStyleDescription = styleRecipeMetadata.description;
+        resultingStyleAlias = styleRecipeMetadata.alias;
       }
     }
 
-    this._resultingStyle.sources[tilesetName] = {
+    resultingStyle.sources[tilesetName] = {
       type: "vector",
-      tiles: [ "https://" + this._domain + "/map/tile?api-version=2.0&tilesetId=" + tilesetName + "&zoom={z}&x={x}&y={y}" ],
-      minzoom: this._tilesetMetadata.minZoom,
-      maxzoom: this._tilesetMetadata.maxZoom
+      tiles: [ "https://" + domain + "/map/tile?api-version=2.0&tilesetId=" + tilesetName + "&zoom={z}&x={x}&y={y}" ],
+      minzoom: tilesetMetadata.minZoom,
+      maxzoom: tilesetMetadata.maxZoom
     };
 
-    this._resultingStyle.layers = this._styleRecipe.layers;
-    this._resultingStyle.layers.forEach(layer => {
+    resultingStyle.layers = styleRecipe.layers;
+    resultingStyle.layers.forEach(layer => {
       // make sure indoor layers are visible
       if ((layer.type !== "fill-extrusion") && layer.metadata && indoorLayers.has(layer.metadata["microsoft.maps:layerGroup"]))
       {
@@ -295,17 +319,27 @@ class AzureMapsExtension {
       layer.source = tilesetName;
     });
 
-    this._resultingStyle.center = [
-      (this._tilesetMetadata.bbox[0] + this._tilesetMetadata.bbox[2]) / 2,
-      (this._tilesetMetadata.bbox[1] + this._tilesetMetadata.bbox[3]) / 2 ];
-    this._resultingStyle.zoom = (this._tilesetMetadata.minZoom + this._tilesetMetadata.maxZoom) / 2;
+    resultingStyle.center = [
+      (tilesetMetadata.bbox[0] + tilesetMetadata.bbox[2]) / 2,
+      (tilesetMetadata.bbox[1] + tilesetMetadata.bbox[3]) / 2 ];
+    resultingStyle.zoom = (tilesetMetadata.minZoom + tilesetMetadata.maxZoom) / 2;
 
-    return this._resultingStyle;
+    if (canceled) return null;
+
+    this._subscriptionKey = subscriptionKey;
+    this._domain = domain;
+    this._styleSetList = styleSetList;
+    this._styleSetName = styleSetName;
+    this._styleSet = styleSet;
+    this._styleRecipe = styleRecipe;
+    this._tilesetMetadata = tilesetMetadata;
+    this._resultingStyleName = resultingStyleName;
+    return this._resultingStyle = resultingStyle;
   }
 
-  getUpdatedStyle() {
+  getUpdatedStyle(newStyle) {
     let styleRecipe = {
-      "layers": this._resultingStyle?.layers
+      "layers": newStyle.layers
     };
 
     styleRecipe.layers.forEach(layer => {
@@ -320,8 +354,8 @@ class AzureMapsExtension {
     return this._styleRecipe.updateAndGenerateZip(JSON.stringify(styleRecipe));
   }
 
-  async uploadResultingStyle(styleDescription, styleAlias) {
-    const blob = await this.getUpdatedStyle();
+  async uploadResultingStyle(newStyle, styleDescription, styleAlias) {
+    const blob = await this.getUpdatedStyle(newStyle);
 
     // Upload new style recipe
     let styleRecipeResponse = await fetch(createStyleRecipe(this._domain, "zip", styleDescription, styleAlias), {
@@ -367,7 +401,6 @@ class AzureMapsExtension {
 export default {
   listStyleSets,
   getStyleSet,
-  getStyleSetStyle,
   ensureStyleSetListValidity,
   ensureStyleSetValidity,
   extractStyleTuples,
