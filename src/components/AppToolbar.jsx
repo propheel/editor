@@ -233,51 +233,6 @@ export default class AppToolbar extends React.Component {
             <MdFileDownload />
             <IconText>Export</IconText>
           </ToolbarAction>
-          <ToolbarAction wdKey="nav:sources" onClick={this.props.onToggleModal.bind(this, 'sources')}>
-            <MdLayers />
-            <IconText>Data Sources</IconText>
-          </ToolbarAction>
-          <ToolbarAction wdKey="nav:settings" onClick={this.props.onToggleModal.bind(this, 'settings')}>
-            <MdSettings />
-            <IconText>Style Settings</IconText>
-          </ToolbarAction>
-
-          <ToolbarSelect wdKey="nav:inspect">
-            <MdFindInPage />
-            <label>View
-              <select
-                className="maputnik-select"
-                onChange={(e) => this.handleSelection(e.target.value)}
-                value={currentView.id}
-              >
-                {views.filter(v => v.group === "general").map((item) => {
-                  return (
-                    <option key={item.id} value={item.id} disabled={item.disabled}>
-                      {item.title}
-                    </option>
-                  );
-                })}
-                <optgroup label="Color accessibility">
-                  {views.filter(v => v.group === "color-accessibility").map((item) => {
-                    return (
-                      <option key={item.id} value={item.id} disabled={item.disabled}>
-                        {item.title}
-                      </option>
-                    );
-                  })}
-                </optgroup>
-              </select>
-            </label>
-          </ToolbarSelect>
-
-          <ToolbarLink href={"https://github.com/maputnik/editor/wiki"}>
-            <MdHelpOutline />
-            <IconText>Help</IconText>
-          </ToolbarLink>
-          <ToolbarLinkHighlighted href={"https://gregorywolanski.typeform.com/to/cPgaSY"}>
-            <MdAssignmentTurnedIn />
-            <IconText>Take the Maputnik Survey</IconText>
-          </ToolbarLinkHighlighted>
         </div>
       </div>
     </nav>

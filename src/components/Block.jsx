@@ -58,8 +58,6 @@ export default class Block extends React.Component {
   }
 
   render() {
-    const errors = [].concat(this.props.error || []);
-
     return <label style={this.props.style}
       data-wd-key={this.props["data-wd-key"]}
       className={classnames({
@@ -73,8 +71,8 @@ export default class Block extends React.Component {
         <div className="maputnik-input-block-label">
           <FieldDocLabel
             label={this.props.label}
+            doc={this.props.fieldSpec.doc}
             onToggleDoc={this.onToggleDoc}
-            fieldSpec={this.props.fieldSpec}
           />
         </div>
       }

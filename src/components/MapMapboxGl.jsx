@@ -82,24 +82,27 @@ export default class MapMapboxGl extends React.Component {
     }
   }
 
-  updateMapFromProps(props) {
+  updateMapFromProps() {
     if(!IS_SUPPORTED) return;
 
     if(!this.state.map) return
-    const metadata = props.mapStyle.metadata || {}
+    const metadata = this.props.mapStyle.metadata || {}
     MapboxGl.accessToken = metadata['maputnik:mapbox_access_token'] || tokens.mapbox
 
     //Mapbox GL now does diffing natively so we don't need to calculate
     //the necessary operations ourselves!
     this.state.map.setStyle(
-      this.props.replaceAccessTokens(props.mapStyle),
+      this.props.replaceAccessTokens(this.props.mapStyle),
       {diff: true}
     )
 
-    let target = {};
-    if (props.mapStyle.center) target.center = props.mapStyle.center;
-    if (props.mapStyle.zoom) target.zoom = props.mapStyle.zoom;
-    if (props.mapStyle.center || props.mapStyle.zoom) this.state.map.easeTo(target);
+    if (this.props.openStyleTransition) {
+      let target = {};
+      if (this.props.mapStyle.center) target.center = this.props.mapStyle.center;
+      if (this.props.mapStyle.zoom) target.zoom = this.props.mapStyle.zoom;
+      if (this.props.mapStyle.center || this.props.mapStyle.zoom) this.state.map.easeTo(target);
+      this.props.afterOpenStyleTransition();
+    }
   }
 
   shouldComponentUpdate(nextProps, nextState) {
@@ -117,7 +120,7 @@ export default class MapMapboxGl extends React.Component {
 
     const map = this.state.map;
 
-    this.updateMapFromProps(this.props);
+    this.updateMapFromProps();
 
     if(this.state.inspect && this.props.inspectModeEnabled !== this.state.inspect._showInspectMap) {
       // HACK: Fix for <https://github.com/maputnik/editor/issues/576>, while we wait for a proper fix.

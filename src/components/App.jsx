@@ -242,6 +242,7 @@ export default class App extends React.Component {
       openlayersDebugOptions: {
         debugToolbox: false,
       },
+      openStyleTransition: false,
     }
 
     this.layerWatcher = new LayerWatcher({
@@ -332,6 +333,7 @@ export default class App extends React.Component {
       save: true,
       addRevision: true,
       initialLoad: false,
+      openStyleTransition: false,
       ...opts,
     };
 
@@ -453,6 +455,7 @@ export default class App extends React.Component {
     this.setState({
       mapStyle: newStyle,
       dirtyMapStyle: dirtyMapStyle,
+      openStyleTransition: opts.openStyleTransition,
       errors: mappedErrors,
     }, () => {
       this.fetchSources();
@@ -578,10 +581,10 @@ export default class App extends React.Component {
 
   openStyle = (styleObj) => {
     if (styleObj.metadata?.type != "Azure Maps style") {
-      this.state.azureMapsExtension.resultingStyle = null;
+      this.state.azureMapsExtension.styleTupleIndex = "";
     }
     styleObj = this.setDefaultValues(styleObj)
-    this.onStyleChanged(styleObj)
+    this.onStyleChanged(styleObj, {openStyleTransition: true})
   }
 
   fetchSources() {
@@ -671,11 +674,12 @@ export default class App extends React.Component {
   }
 
   mapRenderer() {
-    const {mapStyle, dirtyMapStyle} = this.state;
+    const {mapStyle, dirtyMapStyle, openStyleTransition} = this.state;
     const metadata = this.state.mapStyle.metadata || {};
 
     const mapProps = {
       mapStyle: (dirtyMapStyle || mapStyle),
+      openStyleTransition: openStyleTransition,
       replaceAccessTokens: (mapStyle) => {
         return style.replaceAccessTokens(mapStyle, {
           allowFallback: true
@@ -684,6 +688,9 @@ export default class App extends React.Component {
       onDataChange: (e) => {
         this.layerWatcher.analyzeMap(e.map)
         this.fetchSources();
+      },
+      afterOpenStyleTransition: () => {
+        this.setState({openStyleTransition: false});
       },
     }
 
@@ -847,7 +854,6 @@ export default class App extends React.Component {
   render() {
     const layers = this.state.mapStyle.layers || []
     const selectedLayer = layers.length > 0 ? layers[this.state.selectedLayerIndex] : null
-    const metadata = this.state.mapStyle.metadata || {}
 
     const toolbar = <AppToolbar
       renderer={this._getRenderer()}
@@ -903,51 +909,17 @@ export default class App extends React.Component {
 
 
     const modals = <div>
-      <ModalDebug
-        renderer={this._getRenderer()}
-        mapboxGlDebugOptions={this.state.mapboxGlDebugOptions}
-        openlayersDebugOptions={this.state.openlayersDebugOptions}
-        onChangeMaboxGlDebug={this.onChangeMaboxGlDebug}
-        onChangeOpenlayersDebug={this.onChangeOpenlayersDebug}
-        isOpen={this.state.isOpen.debug}
-        onOpenToggle={this.toggleModal.bind(this, 'debug')}
-        mapView={this.state.mapView}
-      />
-      <ModalShortcuts
-        ref={(el) => this.shortcutEl = el}
-        isOpen={this.state.isOpen.shortcuts}
-        onOpenToggle={this.toggleModal.bind(this, 'shortcuts')}
-      />
-      <ModalSettings
-        mapStyle={this.state.mapStyle}
-        onStyleChanged={this.onStyleChanged}
-        onChangeMetadataProperty={this.onChangeMetadataProperty}
-        isOpen={this.state.isOpen.settings}
-        onOpenToggle={this.toggleModal.bind(this, 'settings')}
-        openlayersDebugOptions={this.state.openlayersDebugOptions}
-      />
       <ModalExport
         mapStyle={this.state.mapStyle}
-        onStyleChanged={this.onStyleChanged}
         isOpen={this.state.isOpen.export}
         onOpenToggle={this.toggleModal.bind(this, 'export')}
         azureMapsExtension={this.state.azureMapsExtension}
       />
       <ModalOpen
-        isOpen={this.state.isOpen.open}
-        azureMapsExtension={this.state.azureMapsExtension}
         onStyleOpen={this.openStyle}
+        isOpen={this.state.isOpen.open}
         onOpenToggle={this.toggleModal.bind(this, 'open')}
-      />
-      <ModalSources
-        mapStyle={this.state.mapStyle}
-        onStyleChanged={this.onStyleChanged}
-        isOpen={this.state.isOpen.sources}
-        onOpenToggle={this.toggleModal.bind(this, 'sources')}
-      />
-      <ModalSurvey
-        isOpen={this.state.isOpen.survey}
-        onOpenToggle={this.toggleModal.bind(this, 'survey')}
+        azureMapsExtension={this.state.azureMapsExtension}
       />
     </div>
 

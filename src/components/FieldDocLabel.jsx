@@ -9,7 +9,10 @@ export default class FieldDocLabel extends React.Component {
       PropTypes.object,
       PropTypes.string
     ]).isRequired,
-    fieldSpec: PropTypes.object,
+    doc: PropTypes.oneOfType([
+      PropTypes.object,
+      PropTypes.string
+    ]),
     onToggleDoc: PropTypes.func,
   }
 
@@ -31,8 +34,7 @@ export default class FieldDocLabel extends React.Component {
   }
 
   render() {
-    const {label, fieldSpec} = this.props;
-    const {doc} = fieldSpec || {};
+    const {label, doc} = this.props;
 
     if (doc) {
       return <label className="maputnik-doc-wrapper">

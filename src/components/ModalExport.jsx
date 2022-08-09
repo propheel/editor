@@ -1,26 +1,16 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import Slugify from 'slugify'
 import { saveAs } from 'file-saver'
-import pkgLockJson from '../../package-lock.json'
-
-import {format} from '@mapbox/mapbox-gl-style-spec'
 import FieldString from './FieldString'
 import InputButton from './InputButton'
 import ModalLoading from './ModalLoading'
 import Modal from './Modal'
 import {MdFileDownload, MdCloudUpload} from 'react-icons/md'
-import style from '../libs/style'
-import fieldSpecAdditional from '../libs/field-spec-additional'
-
-
-const MAPBOX_GL_VERSION = pkgLockJson.dependencies["mapbox-gl"].version;
 
 
 export default class ModalExport extends React.Component {
   static propTypes = {
     mapStyle: PropTypes.object.isRequired,
-    onStyleChanged: PropTypes.func.isRequired,
     isOpen: PropTypes.bool.isRequired,
     onOpenToggle: PropTypes.func.isRequired,
     azureMapsExtension: PropTypes.object.isRequired,
@@ -29,95 +19,40 @@ export default class ModalExport extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      azMapsResultingStyleDescription: props.azureMapsExtension.resultingStyleDescription,
-      azMapsResultingStyleAlias: props.azureMapsExtension.resultingStyleAlias,
+      azMapsStyleAlias: this.props.azureMapsExtension.styleAlias,
+      azMapsStyleDescription: this.props.azureMapsExtension.styleDescription,
+      azMapsMapConfigurationAlias: this.props.azureMapsExtension.mapConfigurationAlias,
+      azMapsMapConfigurationDescription: this.props.azureMapsExtension.mapConfigurationDescription,
       activeRequestMessage: ""
     }
   }
 
-  tokenizedStyle () {
-    return format(
-      style.stripAccessTokens(
-        style.replaceAccessTokens(this.props.mapStyle)
-      )
-    );
-  }
-
-  exportName () {
-    if(this.props.mapStyle.name) {
-      return Slugify(this.props.mapStyle.name, {
-        replacement: '_',
-        remove: /[*\-+~.()'"!:]/g,
-        lower: true
-      });
-    } else {
-      return this.props.mapStyle.id
-    }
-  }
-
-  downloadHtml() {
-    const tokenStyle = this.tokenizedStyle();
-    const htmlTitle = this.props.mapStyle.name || "Map";
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>${htmlTitle}</title>
-  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <script src="https://api.mapbox.com/mapbox-gl-js/v${MAPBOX_GL_VERSION}/mapbox-gl.js"></script>
-  <link href="https://api.mapbox.com/mapbox-gl-js/v${MAPBOX_GL_VERSION}/mapbox-gl.css" rel="stylesheet" />
-  <style>
-    body { margin: 0; padding: 0; }
-    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <script>
-      mapboxgl.accessToken = 'access_token';
-      const map = new mapboxgl.Map({
-         container: 'map',
-         style: ${tokenStyle},
-      });
-      map.addControl(new mapboxgl.NavigationControl());
-  </script>
-</body>
-</html>
-`;
-
-    const blob = new Blob([html], {type: "text/html;charset=utf-8"});
-    const exportName = this.exportName();
-    saveAs(blob, exportName + ".html");
-  }
-
-  downloadStyle() {
-    const tokenStyle = this.tokenizedStyle();
-    const blob = new Blob([tokenStyle], {type: "application/json;charset=utf-8"});
-    const exportName = this.exportName();
-    saveAs(blob, exportName + ".json");
-  }
-
-  changeMetadataProperty(property, value) {
-    const changedStyle = {
-      ...this.props.mapStyle,
-      metadata: {
-        ...this.props.mapStyle.metadata,
-        [property]: value
-      }
-    }
-    this.props.onStyleChanged(changedStyle)
-  }
-
-  onChangeAzureMapsResultingStyleDescription = (styleDescription) => {
+  onChangeAzureMapsStyleDescription = (styleDescription) => {
+    this.props.azureMapsExtension.styleDescription = styleDescription;
     this.setState({
-      azMapsResultingStyleDescription: styleDescription
-    })
+      azMapsStyleDescription: styleDescription
+    });
   }
 
-  onChangeAzureMapsResultingStyleAlias = (styleAlias) => {
+  onChangeAzureMapsStyleAlias = (styleAlias) => {
+    this.props.azureMapsExtension.styleAlias = styleAlias;
     this.setState({
-      azMapsResultingStyleAlias: styleAlias
-    })
+      azMapsStyleAlias: styleAlias
+    });
+  }
+
+  onChangeAzureMapsMapConfigurationDescription = (mapConfigurationDescription) => {
+    this.props.azureMapsExtension.mapConfigurationDescription = mapConfigurationDescription;
+    this.setState({
+      azMapsMapConfigurationDescription: mapConfigurationDescription
+    });
+  }
+
+  onChangeAzureMapsMapConfigurationAlias = (mapConfigurationAlias) => {
+    this.props.azureMapsExtension.mapConfigurationAlias = mapConfigurationAlias;
+    this.setState({
+      azMapsMapConfigurationAlias: mapConfigurationAlias
+    });
   }
 
   downloadAzureMapsStyle() {
@@ -128,11 +63,11 @@ export default class ModalExport extends React.Component {
   }
 
   uploadAzureMapsStyle() {
-    this.props.azureMapsExtension.uploadResultingStyle(this.props.mapStyle, this.state.azMapsResultingStyleDescription, this.state.azMapsResultingStyleAlias)
-    .then((uploadedStyleUrl) => {
+    this.props.azureMapsExtension.uploadResultingStyle(this.props.mapStyle)
+    .then((styleId) => {
       this.setState({
         activeRequest: { abort: () => { } },
-        activeRequestMessage: "Success! The uploaded style is accessible here: " + uploadedStyleUrl
+        activeRequestMessage: "Success! The uploaded style has the following ID: " + styleId
       });
     })
     .catch((err) => {
@@ -146,6 +81,35 @@ export default class ModalExport extends React.Component {
     this.setState({
       activeRequest: { abort: () => { } },
       activeRequestMessage: "Uploading Azure Maps Style..."
+    });
+  }
+
+  downloadAzureMapsMapConfiguration() {
+    this.props.azureMapsExtension.getUpdatedMapConfiguration()
+    .then((zipBlob) => {
+      saveAs(zipBlob, "azureMapsMapConfiguration.zip");
+    })
+  }
+
+  uploadAzureMapsMapConfiguration() {
+    this.props.azureMapsExtension.uploadResultingMapConfiguration()
+    .then((mapConfigurationId) => {
+      this.setState({
+        activeRequest: { abort: () => { } },
+        activeRequestMessage: "Success! The uploaded map configuration has the following ID: " + mapConfigurationId
+      });
+    })
+    .catch((err) => {
+      this.setState({
+        activeRequest: { abort: () => { } },
+        activeRequestMessage: "Failed uploading the map configuration"
+      });
+      console.error(err);
+    })
+
+    this.setState({
+      activeRequest: { abort: () => { } },
+      activeRequestMessage: "Uploading Azure Maps Map Configuration..."
     });
   }
 
@@ -168,56 +132,12 @@ export default class ModalExport extends React.Component {
           data-wd-key="modal:export"
           isOpen={this.props.isOpen}
           onOpenToggle={this.props.onOpenToggle}
-          title={'Export Style'}
+          title={'Export Style & Map Configuration'}
           className="maputnik-export-modal"
         >
 
           <section className="maputnik-modal-section">
-            <h1>Download Style</h1>
-            <p>
-              Download a JSON style to your computer.
-            </p>
-
-            <div>
-              <FieldString
-                label={fieldSpecAdditional.maputnik.mapbox_access_token.label}
-                fieldSpec={fieldSpecAdditional.maputnik.mapbox_access_token}
-                value={(this.props.mapStyle.metadata || {})['maputnik:mapbox_access_token']}
-                onChange={this.changeMetadataProperty.bind(this, "maputnik:mapbox_access_token")}
-              />
-              <FieldString
-                label={fieldSpecAdditional.maputnik.maptiler_access_token.label}
-                fieldSpec={fieldSpecAdditional.maputnik.maptiler_access_token}
-                value={(this.props.mapStyle.metadata || {})['maputnik:openmaptiles_access_token']}
-                onChange={this.changeMetadataProperty.bind(this, "maputnik:openmaptiles_access_token")}
-              />
-              <FieldString
-                label={fieldSpecAdditional.maputnik.thunderforest_access_token.label}
-                fieldSpec={fieldSpecAdditional.maputnik.thunderforest_access_token}
-                value={(this.props.mapStyle.metadata || {})['maputnik:thunderforest_access_token']}
-                onChange={this.changeMetadataProperty.bind(this, "maputnik:thunderforest_access_token")}
-              />
-            </div>
-
-            <div className="maputnik-modal-export-buttons">
-              <InputButton
-                onClick={this.downloadStyle.bind(this)}
-              >
-                <MdFileDownload />
-                Download Style
-              </InputButton>
-
-              <InputButton
-                onClick={this.downloadHtml.bind(this)}
-              >
-                <MdFileDownload />
-                Download HTML
-              </InputButton>
-            </div>
-          </section>
-
-          <section className="maputnik-modal-section">
-            <h1>Azure Maps Style</h1>
+            <h1>Azure Maps - Style</h1>
 
             <p>
               Download current style to your local machine.
@@ -239,15 +159,17 @@ export default class ModalExport extends React.Component {
             <div>
               <FieldString
                 label="Style description"
-                fieldSpec={fieldSpecAdditional.maputnik.mapbox_access_token}
-                value={this.state.azMapsResultingStyleDescription}
-                onChange={this.onChangeAzureMapsResultingStyleDescription}
+                fieldSpec={{doc:"Human-readable description of the uploaded style."}}
+                value={this.props.azureMapsExtension.styleDescription}
+                onChange={this.onChangeAzureMapsStyleDescription}
               />
               <FieldString
                 label="Style alias"
-                fieldSpec={fieldSpecAdditional.maputnik.maptiler_access_token}
-                value={this.state.azMapsResultingStyleAlias}
-                onChange={this.onChangeAzureMapsResultingStyleAlias}
+                fieldSpec={{doc:`Alias of the uploaded style. Contains only alphanumeric characters (0-9, a-z, A-Z), hyphen (-) and underscore (_). Can be empty, so the resulting style can be referenced by the styleId only.
+                
+                WARNING! If the alias of an existing style is used the style will be overwritten. No map configurations will be updated.`}}
+                value={this.props.azureMapsExtension.styleAlias}
+                onChange={this.onChangeAzureMapsStyleAlias}
               />
             </div>
 
@@ -260,11 +182,58 @@ export default class ModalExport extends React.Component {
               </InputButton>
             </div>
           </section>
+
+          <section className="maputnik-modal-section">
+            <h1>Azure Maps - Map Configuration</h1>
+
+            <p>
+              Download current map configuration to your local machine.
+            </p>
+
+            <div className="maputnik-modal-export-buttons">
+              <InputButton
+                onClick={this.downloadAzureMapsMapConfiguration.bind(this)}
+              >
+                <MdFileDownload />
+                Download Map Configuration
+              </InputButton>
+            </div>
+
+            <p>
+              Upload current map configuration to your Creator's account.
+            </p>
+
+            <div>
+              <FieldString
+                label="Map configuration description"
+                fieldSpec={{doc:"Human-readable description of the uploaded map configuration."}}
+                value={this.props.azureMapsExtension.mapConfigurationDescription}
+                onChange={this.onChangeAzureMapsMapConfigurationDescription}
+              />
+              <FieldString
+                label="Map configuration alias"
+                fieldSpec={{doc:`Alias of the uploaded map configuration. Contains only alphanumeric characters (0-9, a-z, A-Z), hyphen (-) and underscore (_). Can be empty, so the resulting map configuration can be referenced by the mapConfigurationId only.
+                
+                WARNING! If the alias of an existing map configuration is used the map configuration will be overwritten.`}}
+                value={this.props.azureMapsExtension.mapConfigurationAlias}
+                onChange={this.onChangeAzureMapsMapConfigurationAlias}
+              />
+            </div>
+
+            <div className="maputnik-modal-export-buttons">
+              <InputButton
+                onClick={this.uploadAzureMapsMapConfiguration.bind(this)}
+              >
+                <MdCloudUpload />
+                Upload Map Configuration
+              </InputButton>
+            </div>
+          </section>
         </Modal>
 
         <ModalLoading
           isOpen={!!this.state.activeRequest}
-          title={'Uploading style'}
+          title={'Uploading...'}
           onCancel={(e) => this.onCancelActiveRequest(e)}
           message={this.state.activeRequestMessage}
         />

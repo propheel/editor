@@ -24,7 +24,7 @@ export default class ModalLoading extends React.Component {
       isOpen={this.props.isOpen}
       underlayClickExits={false}
       underlayProps={{
-        onClick: (e) => underlayProps(e)
+        onClick: (e) => underlayOnClick(e)
       }}
       closeable={false}
       title={this.props.title}

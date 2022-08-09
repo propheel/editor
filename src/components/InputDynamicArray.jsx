@@ -10,7 +10,7 @@ import capitalize from 'lodash.capitalize'
 import InputUrl from './InputUrl'
 
 
-export default class FieldDynamicArray extends React.Component {
+export default class InputDynamicArray extends React.Component {
   static propTypes = {
     value: PropTypes.array,
     type: PropTypes.string,
@@ -133,7 +133,6 @@ class DeleteValueInputButton extends React.Component {
     >
       <FieldDocLabel
         label={<MdDelete />}
-        doc={"Remove array item."}
       />
     </InputButton>
   }
