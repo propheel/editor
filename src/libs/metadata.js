@@ -21,6 +21,33 @@ function loadJSON(url, headers, defaultValue, cb) {
 export function downloadGlyphsMetadata(urlTemplate, headers, cb) {
   if(!urlTemplate) return cb([])
 
+  if (urlTemplate.includes("azure") || urlTemplate.includes("microsoft")) {
+    cb([
+      "SegoeFrutigerHelveticaMYingHei-Bold",
+      "SegoeFrutigerHelveticaMYingHei-Medium",
+      "SegoeFrutigerHelveticaMYingHei-Regular",
+      "SegoeUi-Bold",
+      "SegoeUi-Light",
+      "SegoeUi-Regular",
+      "SegoeUi-SemiBold",
+      "SegoeUi-SemiLight",
+      "SegoeUi-SymbolRegular",
+      "StandardCondensedSegoeUi-Black",
+      "StandardCondensedSegoeUi-Bold",
+      "StandardCondensedSegoeUi-Light",
+      "StandardCondensedSegoeUi-Regular",
+      "StandardFont-Black",
+      "StandardFont-Bold",
+      "StandardFontCondensed-Black",
+      "StandardFontCondensed-Bold",
+      "StandardFontCondensed-Light",
+      "StandardFontCondensed-Regular",
+      "StandardFont-Light",
+      "StandardFont-Regular"
+    ]);
+    return;
+  }
+
   // Special handling because Tileserver GL serves the fontstacks metadata differently
   // https://github.com/klokantech/tileserver-gl/pull/104#issuecomment-274444087
   let urlObj = npmurl.parse(urlTemplate);

@@ -127,8 +127,8 @@ export default class AppToolbar extends React.Component {
     }
   }
 
-  handleSelection(val) {
-    this.props.onSetMapState(val);
+  selectBaseMap(val) {
+    this.props.onSetBaseMap(val);
   }
 
   onSkip = (target) => {
@@ -142,46 +142,47 @@ export default class AppToolbar extends React.Component {
   }
 
   render() {
-    const views = [
+    const baseMaps = [
       {
-        id: "map",
-        group: "general",
-        title: "Map",
+        id: "microsoft_light",
+        title: "Microsoft light (road)"
       },
       {
-        id: "inspect",
-        group: "general",
-        title: "Inspect",
-        disabled: this.props.renderer !== 'mbgljs',
+        id: "microsoft_dark",
+        title: "Microsoft dark (night)"
       },
       {
-        id: "filter-deuteranopia",
-        group: "color-accessibility",
-        title: "Deuteranopia filter",
-        disabled: !colorAccessibilityFiltersEnabled,
+        id: "microsoft_grayscale_light",
+        title: "Microsoft grayscale light"
       },
       {
-        id: "filter-protanopia",
-        group: "color-accessibility",
-        title: "Protanopia filter",
-        disabled: !colorAccessibilityFiltersEnabled,
+        id: "microsoft_grayscale_dark",
+        title: "Microsoft grayscale dark"
       },
       {
-        id: "filter-tritanopia",
-        group: "color-accessibility",
-        title: "Tritanopia filter",
-        disabled: !colorAccessibilityFiltersEnabled,
+        id: "microsoft_shaded_relief",
+        title: "Microsoft light (road_shaded_relief)"
       },
       {
-        id: "filter-achromatopsia",
-        group: "color-accessibility",
-        title: "Achromatopsia filter",
-        disabled: !colorAccessibilityFiltersEnabled,
+        id: "microsoft_high_contrast_light",
+        title: "Microsoft high contrast light"
+      },
+      {
+        id: "microsoft_high_contrast_dark",
+        title: "Microsoft high contrast dark"
+      },
+      {
+        id: "microsoft_satellite",
+        title: "Microsoft satellite"
+      },
+      {
+        id: "microsoft_satellite_road",
+        title: "Microsoft satellite with road labels"
       },
     ];
 
-    const currentView = views.find((view) => {
-      return view.id === this.props.mapState;
+    const currentBaseMap = baseMaps.find(baseMap => {
+      return baseMap.id === this.props.baseMap;
     });
 
     return <nav className='maputnik-toolbar'>
@@ -233,6 +234,24 @@ export default class AppToolbar extends React.Component {
             <MdFileDownload />
             <IconText>Export</IconText>
           </ToolbarAction>
+          <ToolbarSelect wdKey="nav:inspect">
+            <MdLayers />
+            <label>Base map
+              <select
+                className="maputnik-select"
+                onChange={(e) => this.selectBaseMap(e.target.value)}
+                value={currentBaseMap.id}
+              >
+                {baseMaps.map(item => {
+                  return (
+                    <option key={item.id} value={item.id}>
+                      {item.title}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+          </ToolbarSelect>
         </div>
       </div>
     </nav>

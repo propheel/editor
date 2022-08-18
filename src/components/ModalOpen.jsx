@@ -18,6 +18,8 @@ export default class ModalOpen extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
+      activeRequest: null,
+      activeRequestMessage: "",
       error: null,
       azMapsKey: props.azureMapsExtension.subscriptionKey,
       azMapsDomain: props.azureMapsExtension.domain,
@@ -42,7 +44,7 @@ export default class ModalOpen extends React.Component {
       this.state.activeRequest.abort();
       this.setState({
         activeRequest: null,
-        activeRequestUrl: null
+        activeRequestMessage: ""
       });
     }
   }
@@ -83,7 +85,7 @@ export default class ModalOpen extends React.Component {
 
       this.setState({
         activeRequest: null,
-        activeRequestUrl: null
+        activeRequestMessage: ""
       });
 
       const mapConfigurationList = azureMapsExt.ensureMapConfigurationListValidity(body)
@@ -100,13 +102,17 @@ export default class ModalOpen extends React.Component {
       if (err.response?.error?.message) {
         errorMessage = err.response.error.message;
       }
+      if (err.reason === "user") {
+        errorMessage = null;
+      } else {
+        console.error(err)
+        console.warn('Could not fetch the map configuration list')
+      }
       this.setState({
         error: errorMessage,
         activeRequest: null,
-        activeRequestUrl: null
+        activeRequestMessage: ""
       })
-      console.error(err)
-      console.warn('Could not fetch the map configuration list')
     })
 
     this.setState({
@@ -115,7 +121,7 @@ export default class ModalOpen extends React.Component {
           canceled = true;
         }
       },
-      activeRequestUrl: "Azure Maps Map Configurations list"
+      activeRequestMessage: "Loading: list of Azure Maps map configurations"
     })
   }
 
@@ -136,17 +142,12 @@ export default class ModalOpen extends React.Component {
 
     azureMapsExt.getMapConfiguration(this.state.azMapsDomain, this.state.azMapsMapConfigurationName, this.state.azMapsKey, canceled)
     .then(blob => {
-      return azMapsMapConfiguration.load(blob);
+      return azMapsMapConfiguration.load(blob, canceled);
     })
     .then(() => {
-      console.log(azMapsMapConfiguration);
-      if(canceled) {
-        return;
-      }
-
       this.setState({
         activeRequest: null,
-        activeRequestUrl: null
+        activeRequestMessage: ""
       });
 
       console.log('Loaded Azure Maps map configuration ' + this.state.azMapsMapConfigurationName + ' with ' + azMapsMapConfiguration.styles.length + ' styles.')
@@ -161,13 +162,17 @@ export default class ModalOpen extends React.Component {
       if (err.response?.error?.message) {
         errorMessage = err.response.error.message;
       }
+      if (err.reason === "user") {
+        errorMessage = null;
+      } else {
+        console.error(err)
+        console.warn('Could not fetch the map configuration')
+      }
       this.setState({
         error: errorMessage,
         activeRequest: null,
-        activeRequestUrl: null
+        activeRequestMessage: ""
       })
-      console.error(err)
-      console.warn('Could not fetch the map configuration')
     })
 
     this.setState({
@@ -176,7 +181,7 @@ export default class ModalOpen extends React.Component {
           canceled = true;
         }
       },
-      activeRequestUrl: "Azure Maps Map configuration style + tileset tuples"
+      activeRequestMessage: "Loading: map configuration's style + tileset tuples"
     })
   }
 
@@ -192,7 +197,6 @@ export default class ModalOpen extends React.Component {
     this.clearError();
 
     let canceled;
-    let errResponseJsonPromise;
 
     console.log('Loading Azure Maps style tuple: ' + this.state.azMapsMapConfiguration.styleTuples[parseInt(this.state.azMapsStyleTupleIndex)])
 
@@ -203,7 +207,6 @@ export default class ModalOpen extends React.Component {
       this.state.azMapsMapConfigurationName,
       this.state.azMapsMapConfiguration,
       this.state.azMapsStyleTupleIndex,
-      errResponseJsonPromise,
       canceled)
     .then((resultingStyle) => {
       if(canceled) {
@@ -212,28 +215,28 @@ export default class ModalOpen extends React.Component {
 
       this.setState({
         activeRequest: null,
-        activeRequestUrl: null
+        activeRequestMessage: ""
       });
-      
+
       this.props.onStyleOpen(resultingStyle)
       this.onOpenToggle()
     })
-    .catch(async (err) => {
+    .catch(err => {
       let errorMessage = 'Failed to load Azure Maps style';
-      if (errResponseJsonPromise)
-      {
-        let errResponseJson = await errResponseJsonPromise;
-        if (errResponseJson?.error?.message) {
-          errorMessage = errResponseJson.error.message;
-        }
+      if (err.response?.error?.message) {
+        errorMessage = err.response.error.message;
+      }
+      if (err.reason === "user") {
+        errorMessage = null;
+      } else {
+        console.error(err)
+        console.warn('Could not create the resulting style to edit')
       }
       this.setState({
         error: errorMessage,
         activeRequest: null,
-        activeRequestUrl: null
+        activeRequestMessage: ""
       })
-      console.error(err)
-      console.warn('Could not fetch the style')
     })
 
     this.setState({
@@ -242,7 +245,7 @@ export default class ModalOpen extends React.Component {
           canceled = true;
         }
       },
-      activeRequestUrl: "Azure Maps Style elements"
+      activeRequestMessage: "Loading: Azure Maps style elements"
     })
   }
 
@@ -263,7 +266,7 @@ export default class ModalOpen extends React.Component {
           data-wd-key="modal:open"
           isOpen={this.props.isOpen}
           onOpenToggle={() => this.onOpenToggle()}
-          title={'Open Style'}
+          title={'Open style'}
         >
           {errorElement}
           <section className="maputnik-modal-section">
@@ -356,9 +359,9 @@ export default class ModalOpen extends React.Component {
 
         <ModalLoading
           isOpen={!!this.state.activeRequest}
-          title={'Loading style'}
+          title="Loading..."
           onCancel={(e) => this.onCancelActiveRequest(e)}
-          message={"Loading: "+this.state.activeRequestUrl}
+          message={this.state.activeRequestMessage}
         />
       </div>
     )

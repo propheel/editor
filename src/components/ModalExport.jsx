@@ -4,8 +4,9 @@ import { saveAs } from 'file-saver'
 import FieldString from './FieldString'
 import InputButton from './InputButton'
 import ModalLoading from './ModalLoading'
+import ModalInfo from './ModalInfo'
 import Modal from './Modal'
-import {MdFileDownload, MdCloudUpload} from 'react-icons/md'
+import { MdCloudUpload } from 'react-icons/md'
 
 
 export default class ModalExport extends React.Component {
@@ -19,12 +20,40 @@ export default class ModalExport extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
+      activeInfo: null,
+      activeRequest: null,
+      activeRequestMessage: "",
+      error: null,
       azMapsStyleAlias: this.props.azureMapsExtension.styleAlias,
       azMapsStyleDescription: this.props.azureMapsExtension.styleDescription,
       azMapsMapConfigurationAlias: this.props.azureMapsExtension.mapConfigurationAlias,
-      azMapsMapConfigurationDescription: this.props.azureMapsExtension.mapConfigurationDescription,
-      activeRequestMessage: ""
+      azMapsMapConfigurationDescription: this.props.azureMapsExtension.mapConfigurationDescription
     }
+  }
+
+  clearError() {
+    this.setState({
+      activeInfo: null,
+      error: null
+    })
+  }
+
+  onCancelActiveRequest(e) {
+    // Else the click propagates to the underlying modal
+    if(e) e.stopPropagation();
+
+    if(this.state.activeRequest) {
+      this.state.activeRequest.abort();
+      this.setState({
+        activeRequest: null,
+        activeRequestMessage: ""
+      });
+    }
+  }
+
+  onOpenToggle() {
+    this.clearError();
+    this.props.onOpenToggle();
   }
 
   onChangeAzureMapsStyleDescription = (styleDescription) => {
@@ -80,7 +109,7 @@ export default class ModalExport extends React.Component {
 
     this.setState({
       activeRequest: { abort: () => { } },
-      activeRequestMessage: "Uploading Azure Maps Style..."
+      activeRequestMessage: "Uploading Azure Maps style..."
     });
   }
 
@@ -91,130 +120,124 @@ export default class ModalExport extends React.Component {
     })
   }
 
-  uploadAzureMapsMapConfiguration() {
-    this.props.azureMapsExtension.uploadResultingMapConfiguration()
+  uploadAzureMapsMapConfiguration = (e) => {
+    e.preventDefault();
+
+    this.clearError();
+
+    let canceled;
+    let resultingStyleId;
+
+    this.props.azureMapsExtension.uploadResultingStyle(this.props.mapStyle, canceled)
+    .then((styleId) => {
+      if(canceled) {
+        return;
+      }
+
+      this.setState({
+        activeRequestMessage: "Success! Uploading map configuration..."
+      });
+
+      resultingStyleId = styleId;
+      return this.props.azureMapsExtension.uploadResultingMapConfiguration(styleId, canceled);
+    })
     .then((mapConfigurationId) => {
-      this.setState({
-        activeRequest: { abort: () => { } },
-        activeRequestMessage: "Success! The uploaded map configuration has the following ID: " + mapConfigurationId
-      });
-    })
-    .catch((err) => {
-      this.setState({
-        activeRequest: { abort: () => { } },
-        activeRequestMessage: "Failed uploading the map configuration"
-      });
-      console.error(err);
-    })
+      if(canceled) {
+        return;
+      }
 
-    this.setState({
-      activeRequest: { abort: () => { } },
-      activeRequestMessage: "Uploading Azure Maps Map Configuration..."
-    });
-  }
-
-  onCancelActiveRequest(e) {
-    if(e) e.stopPropagation();
-
-    if(this.state.activeRequest) {
-      this.state.activeRequest.abort();
       this.setState({
+        activeInfo: ["Success!", "Style ID: "+resultingStyleId, "Map configuration ID: "+mapConfigurationId],
         activeRequest: null,
         activeRequestMessage: ""
       });
-    }
+    })
+    .catch(err => {
+      let errorMessage = 'Failed to upload map configuration';
+      if (err.response?.error?.message) {
+        errorMessage = err.response.error.message;
+      }
+      if (err.reason === "user") {
+        errorMessage = null;
+      } else {
+        console.error(err)
+        console.warn('Could not upload map configuration')
+      }
+      this.setState({
+        error: errorMessage,
+        activeRequest: null,
+        activeRequestUrl: null
+      })
+    })
+
+    this.setState({
+      activeRequest: {
+        abort: function() {
+          canceled = true;
+        }
+      },
+      activeRequestMessage: "Uploading style..."
+    })
   }
 
   render() {
+    let errorElement;
+    if (this.state.error) {
+      errorElement = (
+        <div className="maputnik-modal-error">
+          {this.state.error}
+          <a href="#" onClick={() => this.clearError()} className="maputnik-modal-error-close">×</a>
+        </div>
+      );
+    }
+
+    let modalInfoMessage = "";
+    if (this.state.activeInfo) {
+      modalInfoMessage = this.state.activeInfo.map(text => <p>{text}</p>);
+    }
+
     return (
       <div>
         <Modal
           data-wd-key="modal:export"
           isOpen={this.props.isOpen}
-          onOpenToggle={this.props.onOpenToggle}
-          title={'Export Style & Map Configuration'}
+          onOpenToggle={() => this.onOpenToggle()}
+          title={'Export style & map configuration'}
           className="maputnik-export-modal"
         >
-
+          {errorElement}
           <section className="maputnik-modal-section">
-            <h1>Azure Maps - Style</h1>
+            <h1>Azure Maps - style & map configuration</h1>
 
             <p>
-              Download current style to your local machine.
-            </p>
-
-            <div className="maputnik-modal-export-buttons">
-              <InputButton
-                onClick={this.downloadAzureMapsStyle.bind(this)}
-              >
-                <MdFileDownload />
-                Download Style
-              </InputButton>
-            </div>
-
-            <p>
-              Upload current style to your Creator's account.
+              Upload current style & map configuration to your Creator's account.
             </p>
 
             <div>
               <FieldString
                 label="Style description"
-                fieldSpec={{doc:"Human-readable description of the uploaded style."}}
+                fieldSpec={{doc:<p>A user-defined description for this style.</p>}}
                 value={this.props.azureMapsExtension.styleDescription}
                 onChange={this.onChangeAzureMapsStyleDescription}
               />
               <FieldString
                 label="Style alias"
-                fieldSpec={{doc:`Alias of the uploaded style. Contains only alphanumeric characters (0-9, a-z, A-Z), hyphen (-) and underscore (_). Can be empty, so the resulting style can be referenced by the styleId only.
-                
-                WARNING! If the alias of an existing style is used the style will be overwritten. No map configurations will be updated.`}}
+                fieldSpec={{doc:<div><p>An alias that can be used to reference this style. Can contain alphanumeric characters (0-9, a-z, A-Z), hyphen (-) and underscore (_). If empty, this style will need to be referenced by the style ID.</p><p>WARNING! Duplicate aliases are not allowed. If the alias of an existing style is used, that style will be overwritten.</p></div>}}
                 value={this.props.azureMapsExtension.styleAlias}
                 onChange={this.onChangeAzureMapsStyleAlias}
               />
             </div>
 
-            <div className="maputnik-modal-export-buttons">
-              <InputButton
-                onClick={this.uploadAzureMapsStyle.bind(this)}
-              >
-                <MdCloudUpload />
-                Upload Style
-              </InputButton>
-            </div>
-          </section>
-
-          <section className="maputnik-modal-section">
-            <h1>Azure Maps - Map Configuration</h1>
-
-            <p>
-              Download current map configuration to your local machine.
-            </p>
-
-            <div className="maputnik-modal-export-buttons">
-              <InputButton
-                onClick={this.downloadAzureMapsMapConfiguration.bind(this)}
-              >
-                <MdFileDownload />
-                Download Map Configuration
-              </InputButton>
-            </div>
-
-            <p>
-              Upload current map configuration to your Creator's account.
-            </p>
-
             <div>
               <FieldString
                 label="Map configuration description"
-                fieldSpec={{doc:"Human-readable description of the uploaded map configuration."}}
+                fieldSpec={{doc:<p>A user-defined description for this map configuration.</p>}}
                 value={this.props.azureMapsExtension.mapConfigurationDescription}
                 onChange={this.onChangeAzureMapsMapConfigurationDescription}
               />
               <FieldString
                 label="Map configuration alias"
-                fieldSpec={{doc:`Alias of the uploaded map configuration. Contains only alphanumeric characters (0-9, a-z, A-Z), hyphen (-) and underscore (_). Can be empty, so the resulting map configuration can be referenced by the mapConfigurationId only.
-                
-                WARNING! If the alias of an existing map configuration is used the map configuration will be overwritten.`}}
+                fieldSpec={{doc:<div><p>An alias used to reference this map configuration. Can contain alphanumeric characters (0-9, a-z, A-Z), hyphen (-) and underscore (_). If empty, this style will need to be referenced by the map configuration ID.</p><p>WARNING! Duplicate aliases are not allowed. If the alias of an existing map configuration is used, that map configuration will be overwritten.</p></div>}}
                 value={this.props.azureMapsExtension.mapConfigurationAlias}
                 onChange={this.onChangeAzureMapsMapConfigurationAlias}
               />
@@ -225,7 +248,7 @@ export default class ModalExport extends React.Component {
                 onClick={this.uploadAzureMapsMapConfiguration.bind(this)}
               >
                 <MdCloudUpload />
-                Upload Map Configuration
+                Upload map configuration
               </InputButton>
             </div>
           </section>
@@ -233,10 +256,18 @@ export default class ModalExport extends React.Component {
 
         <ModalLoading
           isOpen={!!this.state.activeRequest}
-          title={'Uploading...'}
+          title="Uploading..."
           onCancel={(e) => this.onCancelActiveRequest(e)}
           message={this.state.activeRequestMessage}
         />
+
+        <ModalInfo
+          isOpen={!!this.state.activeInfo}
+          onOpenToggle={() => this.clearError()}
+          title="Upload complete"
+          message={modalInfoMessage}
+        />
+
       </div>
     )
   }

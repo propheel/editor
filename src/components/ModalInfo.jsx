@@ -5,10 +5,10 @@ import InputButton from './InputButton'
 import Modal from './Modal'
 
 
-export default class ModalLoading extends React.Component {
+export default class ModalInfo extends React.Component {
   static propTypes = {
     isOpen: PropTypes.bool.isRequired,
-    onCancel: PropTypes.func.isRequired,
+    onOpenToggle: PropTypes.func.isRequired,
     title: PropTypes.string.isRequired,
     message: PropTypes.node.isRequired,
   }
@@ -20,22 +20,21 @@ export default class ModalLoading extends React.Component {
 
   render() {
     return <Modal
-      data-wd-key="modal:loading"
+      data-wd-key="modal:info"
       isOpen={this.props.isOpen}
       underlayClickExits={false}
       underlayProps={{
         onClick: (e) => this.underlayOnClick(e)
       }}
-      closeable={false}
       title={this.props.title}
-      onOpenToggle={() => this.props.onCancel()}
+      onOpenToggle={this.props.onOpenToggle}
     >
       <p>
         {this.props.message}
       </p>
       <p className="maputnik-dialog__buttons">
-        <InputButton onClick={(e) => this.props.onCancel(e)}>
-          Cancel
+        <InputButton onClick={this.props.onOpenToggle}>
+          OK
         </InputButton>
       </p>
     </Modal>

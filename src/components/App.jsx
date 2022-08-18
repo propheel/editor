@@ -211,6 +211,7 @@ export default class App extends React.Component {
       errors: [],
       infos: [],
       mapStyle: style.emptyStyle,
+      selectableLayers: [],
       selectedLayerIndex: 0,
       sources: {},
       vectorLayers: {},
@@ -451,10 +452,11 @@ export default class App extends React.Component {
     if (opts.save) {
       this.saveStyle(newStyle);
     }
-       
+
     this.setState({
       mapStyle: newStyle,
       dirtyMapStyle: dirtyMapStyle,
+      selectableLayers: newStyle.layers.filter(layer => !(layer.metadata && layer.metadata["azmaps:type"] == "baseMap layer")),
       openStyleTransition: opts.openStyleTransition,
       errors: mappedErrors,
     }, () => {
@@ -485,7 +487,7 @@ export default class App extends React.Component {
 
   onMoveLayer = (move) => {
     let { oldIndex, newIndex } = move;
-    let layers = this.state.mapStyle.layers;
+    let layers = this.state.selectableLayers;
     oldIndex = clamp(oldIndex, 0, layers.length-1);
     newIndex = clamp(newIndex, 0, layers.length-1);
     if(oldIndex === newIndex) return;
@@ -502,22 +504,30 @@ export default class App extends React.Component {
   }
 
   onLayersChange = (changedLayers) => {
+    let layers = [];
+    this.state.mapStyle.layers.forEach(layer => {
+      if (layer.metadata && layer.metadata["azmaps:type"] == "baseMap layer") {
+        layers.push(layer);
+      }
+    });
+    changedLayers.forEach(layer => layers.push(layer));
+
     const changedStyle = {
       ...this.state.mapStyle,
-      layers: changedLayers
+      layers
     }
     this.onStyleChanged(changedStyle)
   }
 
   onLayerDestroy = (index) => {
-    let layers = this.state.mapStyle.layers;
+    let layers = this.state.selectableLayers;
     const remainingLayers = layers.slice(0);
     remainingLayers.splice(index, 1);
     this.onLayersChange(remainingLayers);
   }
 
   onLayerCopy = (index) => {
-    let layers = this.state.mapStyle.layers;
+    let layers = this.state.selectableLayers;
     const changedLayers = layers.slice(0)
 
     const clonedLayer = cloneDeep(changedLayers[index])
@@ -527,7 +537,7 @@ export default class App extends React.Component {
   }
 
   onLayerVisibilityToggle = (index) => {
-    let layers = this.state.mapStyle.layers;
+    let layers = this.state.selectableLayers;
     const changedLayers = layers.slice(0)
 
     const layer = { ...changedLayers[index] }
@@ -541,7 +551,7 @@ export default class App extends React.Component {
 
 
   onLayerIdChange = (index, oldId, newId) => {
-    const changedLayers = this.state.mapStyle.layers.slice(0)
+    const changedLayers = this.state.selectableLayers.slice(0)
     changedLayers[index] = {
       ...changedLayers[index],
       id: newId
@@ -551,7 +561,7 @@ export default class App extends React.Component {
   }
 
   onLayerChanged = (index, layer) => {
-    const changedLayers = this.state.mapStyle.layers.slice(0)
+    const changedLayers = this.state.selectableLayers.slice(0)
     changedLayers[index] = layer
 
     this.onLayersChange(changedLayers)
@@ -561,6 +571,23 @@ export default class App extends React.Component {
     this.setState({
       mapState: newState
     }, this.setStateInUrl);
+  }
+
+  setBaseMap = (newBaseMap) => {
+    this.state.azureMapsExtension.baseMap = newBaseMap;
+    this.state.azureMapsExtension.createResultingStyle(
+      this.state.azureMapsExtension.subscriptionKey,
+      this.state.azureMapsExtension.domain,
+      this.state.azureMapsExtension.mapConfigurationList,
+      this.state.azureMapsExtension.mapConfigurationName,
+      this.state.azureMapsExtension.mapConfiguration,
+      this.state.azureMapsExtension.styleTupleIndex)
+    .then(resultingStyle => {
+      this.onStyleChanged(resultingStyle);
+    })
+    .catch(err => {
+      console.error(err);
+    })
   }
 
   setDefaultValues = (styleObj) => {
@@ -580,7 +607,7 @@ export default class App extends React.Component {
   }
 
   openStyle = (styleObj) => {
-    if (styleObj.metadata?.type != "Azure Maps style") {
+    if (!styleObj.metadata || styleObj.metadata["azmaps:type"] != "Azure Maps style") {
       this.state.azureMapsExtension.styleTupleIndex = "";
     }
     styleObj = this.setDefaultValues(styleObj)
@@ -674,12 +701,12 @@ export default class App extends React.Component {
   }
 
   mapRenderer() {
-    const {mapStyle, dirtyMapStyle, openStyleTransition} = this.state;
-    const metadata = this.state.mapStyle.metadata || {};
+    const {mapStyle, dirtyMapStyle, selectableLayers, openStyleTransition} = this.state;
 
     const mapProps = {
       mapStyle: (dirtyMapStyle || mapStyle),
-      openStyleTransition: openStyleTransition,
+      selectableLayers,
+      openStyleTransition,
       replaceAccessTokens: (mapStyle) => {
         return style.replaceAccessTokens(mapStyle, {
           allowFallback: true
@@ -711,7 +738,7 @@ export default class App extends React.Component {
         onChange={this.onMapChange}
         options={ {...this.state.mapboxGlDebugOptions, transformRequest: this.transformRequest } }
         inspectModeEnabled={this.state.mapState === "inspect"}
-        highlightedLayer={this.state.mapStyle.layers[this.state.selectedLayerIndex]}
+        highlightedLayer={this.state.selectableLayers[this.state.selectedLayerIndex]}
         onLayerSelect={this.onLayerSelect} />
     }
 
@@ -799,7 +826,7 @@ export default class App extends React.Component {
         if (!invalid) {
           this.setState({
             selectedLayerIndex,
-            selectedLayerOriginalId: this.state.mapStyle.layers[selectedLayerIndex].id,
+            selectedLayerOriginalId: this.state.selectableLayers[selectedLayerIndex].id,
           });
         }
       }
@@ -812,7 +839,7 @@ export default class App extends React.Component {
   onLayerSelect = (index) => {
     this.setState({
       selectedLayerIndex: index,
-      selectedLayerOriginalId: this.state.mapStyle.layers[index].id,
+      selectedLayerOriginalId: this.state.selectableLayers[index].id,
     }, this.setStateInUrl);
   }
 
@@ -852,7 +879,7 @@ export default class App extends React.Component {
   }
 
   render() {
-    const layers = this.state.mapStyle.layers || []
+    const layers = this.state.selectableLayers
     const selectedLayer = layers.length > 0 ? layers[this.state.selectedLayerIndex] : null
 
     const toolbar = <AppToolbar
@@ -865,6 +892,8 @@ export default class App extends React.Component {
       onStyleOpen={this.onStyleChanged}
       onSetMapState={this.setMapState}
       onToggleModal={this.toggleModal.bind(this)}
+      baseMap={this.state.azureMapsExtension.baseMap}
+      onSetBaseMap={this.setBaseMap}
     />
 
     const layerList = <LayerList
@@ -885,7 +914,7 @@ export default class App extends React.Component {
       layer={selectedLayer}
       layerIndex={this.state.selectedLayerIndex}
       isFirstLayer={this.state.selectedLayerIndex < 1}
-      isLastLayer={this.state.selectedLayerIndex === this.state.mapStyle.layers.length-1}
+      isLastLayer={this.state.selectedLayerIndex === this.state.selectableLayers.length-1}
       sources={this.state.sources}
       vectorLayers={this.state.vectorLayers}
       spec={this.state.spec}

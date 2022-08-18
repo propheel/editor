@@ -1,6 +1,8 @@
 import JSZip from 'jszip'
 
-const apiVersion = "2022-01-01-preview";
+const apiVersion = "2022-09-01-preview";
+
+const aliasRegex = new RegExp('^[a-zA-Z0-9_-]*$');
 
 const domains = [
   "us.atlas.microsoft.com",
@@ -20,6 +22,18 @@ const indoorLayers = new Set([
   "line_element",
   "labels_indoor"]);
 
+const baseMapStyles = {
+  microsoft_light: "road",
+  microsoft_dark: "night",
+  microsoft_grayscale_dark: "grayscale_dark",
+  microsoft_grayscale_light: "grayscale_light",
+  microsoft_shaded_relief: "road_shaded_relief",
+  microsoft_high_contrast_dark: "high_contrast_dark",
+  microsoft_high_contrast_light: "high_contrast_light",
+  microsoft_satellite: "satellite",
+  microsoft_satellite_road: "satellite_road_labels"
+};
+
 const fakeDomainForSprite = "https://fake.domain.com/for/sprite";
 
 // Azure Maps REST API URLs:
@@ -32,15 +46,47 @@ function createMapConfigurationUrl(domain, alias, description) { return "https:/
 function listMapConfigurationsUrl(domain) { return "https://" + domain + "/styles/mapConfigurations?api-version=" + apiVersion; }
 function getMapConfigurationUrl(domain, mapConfigurationName) { return "https://" + domain + "/styles/mapConfigurations/" + mapConfigurationName + "?api-version=" + apiVersion; }
 function deleteMapConfigurationUrl(domain, mapConfigurationName) { return "https://" + domain + "/styles/mapConfigurations/" + mapConfigurationName + "?api-version=" + apiVersion; }
+function getMapConfigurationStyleUrl(domain, mapConfigurationName, styleName) { return "https://" + domain + "/styles/mapConfigurations/" + mapConfigurationName + "/" + styleName + "?api-version=" + apiVersion; }
 
 // Wrapper functions to issue requests:
-async function processResponse(response, canceled) {
-  if (canceled) return null;
-  if (!response.ok) {
-    let err = new Error('Response is not OK. Check console');
-    err.response = await response.json();
-    console.log(err.response);
+function throwIfUserCanceled(canceled) {
+  if (canceled) {
+    let err = new Error('Canceled by the user.');
+    err.reason = 'user';
     throw err;
+  }
+}
+
+function throwIfBadAlias(alias) {
+  let errorMessage = "";
+  if (alias.startsWith("microsoft")) {
+    errorMessage = "Aliases starting with 'microsoft' are forbidden.";
+  }
+  if (!aliasRegex.test(alias)) {
+    errorMessage = "The specified alias contains invalid characters.";
+  }
+  if (errorMessage) {
+    let err = new Error(errorMessage);
+    err.response = {
+      error: {
+        message: errorMessage
+      }
+    };
+    throw err;
+  }
+}
+
+async function throwResponseJsonError(response) {
+  let err = new Error('Response is not OK. Check console');
+  err.response = await response.json();
+  console.log(err.response);
+  throw err;
+}
+
+async function processResponse(response, canceled) {
+  throwIfUserCanceled(canceled)
+  if (!response.ok) {
+    throwResponseJsonError(response)
   }
   return response;
 }
@@ -63,7 +109,7 @@ async function getTilesetMetadata(domain, tilesetId, subscriptionKey, canceled) 
   }), canceled);
 }
 
-async function uploadStyleArtifact(url, blob, subscriptionKey) {
+async function uploadStyleArtifact(url, blob, subscriptionKey, canceled) {
   let response = await fetch(url, {
     method: 'POST',
     mode: 'cors',
@@ -72,9 +118,10 @@ async function uploadStyleArtifact(url, blob, subscriptionKey) {
     body: blob
   });
 
+  throwIfUserCanceled(canceled)
+
   if (!response.ok || !response.headers.has("operation-location")) {
-    console.log(response)
-    throw new Error('Response is not OK. Check console');
+    throwResponseJsonError(response)
   }
 
   const statusUrl = response.headers.get("operation-location");
@@ -87,9 +134,9 @@ async function uploadStyleArtifact(url, blob, subscriptionKey) {
     });
     console.log(statusResponse);
     console.log(statusResponse.headers)
+    throwIfUserCanceled(canceled)
     if (!statusResponse.ok) {
-      console.log(await statusResponse.json());
-      throw new Error('Response is not OK. Check console');
+      throwResponseJsonError(statusResponse)
     }
     if (statusResponse.headers.has('resource-location')) {
       const resourceLocation = statusResponse.headers.get('resource-location');
@@ -100,17 +147,13 @@ async function uploadStyleArtifact(url, blob, subscriptionKey) {
     const jsonResponse = await statusResponse.json();
     if (jsonResponse.status !== "Running")
     {
-      console.log(jsonResponse);
-      throw new Error('Response is not OK. Check console');
+      throwResponseJsonError(statusResponse)
     }
   }
 }
 
 async function createStyle(domain, alias, description, blob, subscriptionKey, canceled) {
-  if (alias.startsWith("microsoft")) {
-    throw new Error("Aliases starting with 'microsoft' are forbidden.");
-  }
-  return await uploadStyleArtifact(createStyleUrl(domain, alias, description), blob, subscriptionKey);
+  return await uploadStyleArtifact(createStyleUrl(domain, alias, description), blob, subscriptionKey, canceled);
 }
 
 async function listStyles(domain, subscriptionKey, canceled) {
@@ -139,10 +182,7 @@ async function deleteStyle(domain, styleName, subscriptionKey, canceled) {
 }
 
 async function createMapConfiguration(domain, alias, description, blob, subscriptionKey, canceled) {
-  if (alias.startsWith("microsoft")) {
-    throw new Error("Aliases starting with 'microsoft' are forbidden.");
-  }
-  return await uploadStyleArtifact(createMapConfigurationUrl(domain, alias, description), blob, subscriptionKey);
+  return await uploadStyleArtifact(createMapConfigurationUrl(domain, alias, description), blob, subscriptionKey, canceled);
 }
 
 async function listMapConfigurations(domain, subscriptionKey, canceled) {
@@ -178,6 +218,14 @@ function ensureMapConfigurationValidity(mapConfiguration) {
   return mapConfiguration;
 }
 
+async function loadBaseMapStyle(domain, baseMapStyle, subscriptionKey, canceled) {
+  return processJsonResponse( await fetch(getMapConfigurationStyleUrl(domain, "microsoft-maps:default", baseMapStyles[baseMapStyle]), {
+    mode: 'cors',
+    headers: {'subscription-key': subscriptionKey},
+    credentials: "same-origin"
+  }), canceled);
+}
+
 class AzureMapsStyle {
 
   constructor() {
@@ -189,36 +237,47 @@ class AzureMapsStyle {
 
   get layers() { return this._json?.layers; }
 
-  async load(styleBlob) {
-    this._zip = await JSZip.loadAsync(styleBlob);
+  async load(styleBlob, canceled) {
+    let styleZip = await JSZip.loadAsync(styleBlob);
+
+    throwIfUserCanceled(canceled);
 
     // check file structure
     let jsons = new Set();
     let pngs = new Set();
-    for (const zipEntry in this._zip.files) {
+    for (const zipEntry in styleZip.files) {
       if (zipEntry.toLowerCase().endsWith(".json")) jsons.add(zipEntry.substring(0, zipEntry.length - 5));
       if (zipEntry.toLowerCase().endsWith(".png")) pngs.add(zipEntry.substring(0, zipEntry.length - 4));
     }
     if (jsons.size - pngs.size != 1) {
-      console.error("The number of JSON files (" + jsons.size + ") must be greater than PNG files (" + pngs.size + ") exactly by 1");
-      return;
+      let err = new Error("The number of JSON files (" + jsons.size + ") must be greater than PNG files (" + pngs.size + ") exactly by 1");
+      throw err;
     }
     for (const imageName of pngs) jsons.delete(imageName);
     if (jsons.size != 1) {
-      console.error("There must be a single JSON file being the style. " + jsons.size + " JSON files found.");
-      return;
+      let err = new Error("There must be a single JSON file being the style. " + jsons.size + " JSON files found.");
+      throw err;
     }
 
     // Load sprite sheets into memory
+    let newSpriteSheets = {};
     for (const imageName of pngs) {
       const pixelRatio = imageName.endsWith("@2x") ? "2" : "1";
-      this._spriteSheets[pixelRatio + ".json"] = URL.createObjectURL(await this._zip.file(imageName + ".json").async("blob"));
-      this._spriteSheets[pixelRatio + ".png"] = URL.createObjectURL(await this._zip.file(imageName + ".png").async("blob"));
+      newSpriteSheets[pixelRatio + ".json"] = URL.createObjectURL(await styleZip.file(imageName + ".json").async("blob"));
+      newSpriteSheets[pixelRatio + ".png"] = URL.createObjectURL(await styleZip.file(imageName + ".png").async("blob"));
+      throwIfUserCanceled(canceled);
     }
 
+    const jsonFileName = jsons.values().next().value + ".json";
+    const json = JSON.parse(await styleZip.file(jsonFileName).async("string"));
+
+    throwIfUserCanceled(canceled);
+
     // load style
-    this._jsonFileName = jsons.values().next().value + ".json";
-    this._json = JSON.parse(await this._zip.file(this._jsonFileName).async("string"));
+    this._zip = styleZip;
+    this._jsonFileName = jsonFileName;
+    this._json = json;
+    this._spriteSheets = newSpriteSheets;
   }
 
   getSpriteUrl(spriteUrl) {
@@ -238,7 +297,11 @@ class AzureMapsStyle {
 
   updateAndGenerateZip(styleJson) {
     this._json = styleJson;
-    this._zip.file(this._jsonFileName, JSON.stringify(styleJson));
+    return this.generateZip();
+  }
+
+  generateZip() {
+    this._zip.file(this._jsonFileName, JSON.stringify(this._json));
     return this._zip.generateAsync({type: "blob"});
   }
 }
@@ -256,22 +319,28 @@ class AzureMapsMapConfiguration {
 
   get styles() { return this._json.styles; }
 
-  async load(mapConfigurationBlob) {
-    this._zip = await JSZip.loadAsync(mapConfigurationBlob);
+  async load(mapConfigurationBlob, canceled) {
+    let mapConfigurationZip = await JSZip.loadAsync(mapConfigurationBlob);
 
     // check file structure
     let jsons = new Set();
-    for (const zipEntry in this._zip.files) {
+    for (const zipEntry in mapConfigurationZip.files) {
       if (zipEntry.toLowerCase().endsWith(".json")) jsons.add(zipEntry.substring(0, zipEntry.length - 5));
     }
     if (jsons.size != 1) {
-      console.error("The number of JSON files (" + jsons.size + ") must be exactly 1 which is map configuration");
-      return;
+      let err = new Error("The number of JSON files (" + jsons.size + ") must be exactly 1 which is map configuration");
+      throw err;
     }
 
+    const jsonFileName = jsons.values().next().value + ".json";
+    const json = ensureMapConfigurationValidity(JSON.parse(await mapConfigurationZip.file(jsonFileName).async("string")));
+
+    throwIfUserCanceled(canceled);
+
     // load map configuration
-    this._jsonFileName = jsons.values().next().value + ".json";
-    this._json = ensureMapConfigurationValidity(JSON.parse(await this._zip.file(this._jsonFileName).async("string")));
+    this._zip = mapConfigurationZip;
+    this._jsonFileName = jsonFileName;
+    this._json = json;
     this._styleTuples = this.extractStyleTuples();
   }
 
@@ -306,7 +375,8 @@ class AzureMapsMapConfiguration {
     }
   }
 
-  updateStyleTupleDetails(styleTupleIndex, newStyle, tilesetId, styleId) {
+  updateStyleTupleDetails(styleTupleIndex, details) {
+    let {newStyle, newBaseMap, tilesetId, styleId} = details;
     let index = 0;
     for (const styleIndex in this._json.styles) {
       if (Object.hasOwn(this._json.styles, styleIndex)) {
@@ -315,6 +385,9 @@ class AzureMapsMapConfiguration {
             if (index == styleTupleIndex) {
               if (!newStyle) {
                 newStyle = this._json.styles[styleIndex];
+              }
+              if (newBaseMap) {
+                newStyle.baseMap = newBaseMap;
               }
               if (tilesetId) {
                 newStyle.layers[tupleIndex].tilesetId = tilesetId;
@@ -373,6 +446,7 @@ class AzureMapsExtension {
     this._language = "en-us";
     this._view = "Unified";
     this._tilesetMetadata;
+    this._baseMap = "microsoft_light";
   }
 
   get domains() { return domains; }
@@ -408,6 +482,13 @@ class AzureMapsExtension {
 
   get mapConfigurationDescription() { return this._mapConfigurationDescription; }
   set mapConfigurationDescription(newMapConfigurationDescription) { this._mapConfigurationDescription = newMapConfigurationDescription; }
+
+  get baseMap() { return this._baseMap; }
+  set baseMap(newBaseMap) {
+    if (!Object.hasOwn(baseMapStyles, newBaseMap)) return;
+    this._mapConfiguration.updateStyleTupleDetails(this._styleTupleIndex, { newBaseMap });
+    this._baseMap = newBaseMap;
+  }
 
   get requestHeaders() { return this._styleTupleIndex ? { 'subscription-key': this._subscriptionKey } : {}; }
 
@@ -445,25 +526,12 @@ class AzureMapsExtension {
     mapConfigurationName,
     mapConfiguration,
     styleTupleIndex,
-    errorResponseJsonPromise,
     canceled) {
 
     const styleTupleDetails = mapConfiguration.getStyleTupleDetails(parseInt(styleTupleIndex));
     if (!styleTupleDetails) {
       throw new Error('Got invalid style tuple index: ' + styleTupleIndex);
     }
-
-    let resultingStyle = {
-      "version": 8,
-      "name": mapConfiguration.styleTuples[parseInt(styleTupleIndex)],
-      "metadata": {
-        "type": "Azure Maps style"
-      },
-      "sources": {},
-      "sprite": fakeDomainForSprite,
-      "glyphs": "https://" + domain + "/styles/glyphs/{fontstack}/{range}.pbf",
-      "layers": []
-    };
 
     const styleName = styleTupleDetails.styleId;
     let style = new AzureMapsStyle();
@@ -495,7 +563,29 @@ class AzureMapsExtension {
     }
 
     // Check base map
-    console.log(styleTupleDetails.style.baseMap);
+    let baseMap = styleTupleDetails.style.baseMap ?? "";
+    if (!Object.hasOwn(baseMapStyles, baseMap)) {
+      baseMap = "";
+    }
+
+    let resultingStyle = {
+      "version": 8,
+      "name": mapConfiguration.styleTuples[parseInt(styleTupleIndex)],
+      "sources": {},
+      "glyphs": "https://" + domain + "/styles/glyphs/{fontstack}/{range}.pbf",
+      "layers": []
+    };
+
+    if (baseMap) {
+      resultingStyle = await loadBaseMapStyle(domain, baseMap, subscriptionKey);
+      resultingStyle.layers.forEach(layer => layer.metadata = { "azmaps:type": "baseMap layer", ...layer.metadata });
+    }
+
+    resultingStyle.metadata = {
+      "azmaps:type": "Azure Maps style",
+      ...resultingStyle.metadata
+    };
+    resultingStyle.sprite = fakeDomainForSprite;
 
     resultingStyle.sources[tilesetName] = {
       type: "vector",
@@ -504,14 +594,14 @@ class AzureMapsExtension {
       maxzoom: tilesetMetadata.maxZoom
     };
 
-    resultingStyle.layers = style.layers;
-    resultingStyle.layers.forEach(layer => {
+    style.layers.forEach(layer => {
       // make sure indoor layers are visible
       if ((layer.type !== "fill-extrusion") && layer.metadata && indoorLayers.has(layer.metadata["microsoft.maps:layerGroup"]))
       {
         layer.layout.visibility = "visible"
       }
       layer.source = tilesetName;
+      resultingStyle.layers.push(layer);
     });
 
     resultingStyle.center = [
@@ -533,12 +623,13 @@ class AzureMapsExtension {
     this._styleAlias = styleAlias;
     this._styleDescription = styleDescription;
     this._tilesetMetadata = tilesetMetadata;
+    this._baseMap = baseMap;
     return resultingStyle;
   }
 
   getUpdatedStyle(newStyle) {
     let style = {
-      "layers": newStyle.layers
+      "layers": newStyle.layers.filter(layer => !(layer.metadata && layer.metadata["azmaps:type"] == "baseMap layer"))
     };
 
     style.layers.forEach(layer => {
@@ -553,8 +644,12 @@ class AzureMapsExtension {
     return this._style.updateAndGenerateZip(style);
   }
 
-  async uploadResultingStyle(newStyle) {
+  async uploadResultingStyle(newStyle, canceled) {
+    throwIfBadAlias(this._styleAlias)
+
     const blob = await this.getUpdatedStyle(newStyle);
+
+    throwIfUserCanceled(canceled)
 
     let oldStyleId = "";
     for (const styleMetadata of (await listStyles(this._domain, this._subscriptionKey)).styles) {
@@ -563,7 +658,7 @@ class AzureMapsExtension {
       }
     }
 
-    const newStyleId = await createStyle(this._domain, this._styleAlias, this._styleDescription, blob, this._subscriptionKey);
+    const newStyleId = await createStyle(this._domain, this._styleAlias, this._styleDescription, blob, this._subscriptionKey, canceled);
 
     if (oldStyleId) {
       await deleteStyle(this._domain, oldStyleId, this._subscriptionKey);
@@ -572,13 +667,17 @@ class AzureMapsExtension {
     return newStyleId;
   }
 
-  async getUpdatedMapConfiguration() {
-    this._mapConfiguration.updateStyleTupleDetails(this._styleTupleIndex, null, null, this._styleAlias);
+  async getUpdatedMapConfiguration(styleId) {
+    this._mapConfiguration.updateStyleTupleDetails(this._styleTupleIndex, { styleId: this._styleAlias ?? styleId });
     return this._mapConfiguration.generateZip();
   }
 
-  async uploadResultingMapConfiguration() {
-    const blob = await this.getUpdatedMapConfiguration();
+  async uploadResultingMapConfiguration(styleId, canceled) {
+    throwIfBadAlias(this._mapConfigurationAlias)
+
+    const blob = await this.getUpdatedMapConfiguration(styleId);
+
+    throwIfUserCanceled(canceled)
 
     let oldMapConfigurationId = "";
     for (const mapConfigurationMetadata of (await listMapConfigurations(this._domain, this._subscriptionKey)).mapConfigurations) {
@@ -587,7 +686,7 @@ class AzureMapsExtension {
       }
     }
 
-    const newMapConfigurationId = await createMapConfiguration(this._domain, this._mapConfigurationAlias, this._mapConfigurationDescription, blob, this._subscriptionKey);
+    const newMapConfigurationId = await createMapConfiguration(this._domain, this._mapConfigurationAlias, this._mapConfigurationDescription, blob, this._subscriptionKey, canceled);
 
     if (oldMapConfigurationId) {
       await deleteMapConfiguration(this._domain, oldMapConfigurationId, this._subscriptionKey);

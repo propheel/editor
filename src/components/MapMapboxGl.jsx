@@ -57,6 +57,8 @@ export default class MapMapboxGl extends React.Component {
     onDataChange: PropTypes.func,
     onLayerSelect: PropTypes.func.isRequired,
     mapStyle: PropTypes.object.isRequired,
+    selectableLayers: PropTypes.array.isRequired,
+    openStyleTransition: PropTypes.bool.isRequired,
     inspectModeEnabled: PropTypes.bool.isRequired,
     highlightedLayer: PropTypes.object,
     options: PropTypes.object,
@@ -80,6 +82,7 @@ export default class MapMapboxGl extends React.Component {
       map: null,
       inspect: null,
     }
+    this.prevSelectableLayers = null;
   }
 
   updateMapFromProps() {
@@ -121,6 +124,15 @@ export default class MapMapboxGl extends React.Component {
     const map = this.state.map;
 
     this.updateMapFromProps();
+
+    if (this.prevSelectableLayers != this.props.selectableLayers) {
+      this.prevSelectableLayers = this.props.selectableLayers;
+      if (this.state.inspect) {
+        this.state.inspect.options.queryParameters = {
+          layers: this.props.selectableLayers.map(layer => layer.id)
+        };
+      }
+    }
 
     if(this.state.inspect && this.props.inspectModeEnabled !== this.state.inspect._showInspectMap) {
       // HACK: Fix for <https://github.com/maputnik/editor/issues/576>, while we wait for a proper fix.
@@ -177,7 +189,7 @@ export default class MapMapboxGl extends React.Component {
     map.addControl(nav, 'top-right');
 
     const tmpNode = document.createElement('div');
-
+    
     const inspect = new MapboxInspect({
       popup: new MapboxGl.Popup({
         closeOnClick: false
@@ -199,7 +211,7 @@ export default class MapMapboxGl extends React.Component {
         }
       }
     })
-    map.addControl(inspect)
+    map.addControl(inspect);
 
     map.on("style.load", () => {
       this.setState({
@@ -231,7 +243,7 @@ export default class MapMapboxGl extends React.Component {
   }
 
   onLayerSelectById = (id) => {
-    const index = this.props.mapStyle.layers.findIndex(layer => layer.id === id);
+    const index = this.props.selectableLayers.findIndex(layer => layer.id === id);
     this.props.onLayerSelect(index);
   }
 
