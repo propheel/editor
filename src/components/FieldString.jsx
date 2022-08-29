@@ -12,7 +12,7 @@ export default class FieldString extends React.Component {
   render() {
     const {props} = this;
 
-    return <Block label={props.label}>
+    return <Block {...props}>
       <InputString {...props} />
     </Block>
   }

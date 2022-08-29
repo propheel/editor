@@ -3,7 +3,7 @@ import PropTypes from 'prop-types'
 import classnames from 'classnames'
 import {detect} from 'detect-browser';
 
-import {MdFileDownload, MdOpenInBrowser, MdSettings, MdLayers, MdHelpOutline, MdFindInPage, MdAssignmentTurnedIn} from 'react-icons/md'
+import {MdFileDownload, MdOpenInBrowser, MdSave, MdLayers} from 'react-icons/md'
 
 
 import logoImage from 'maputnik-design/logos/logo-color.svg'
@@ -127,8 +127,8 @@ export default class AppToolbar extends React.Component {
     }
   }
 
-  handleSelection(val) {
-    this.props.onSetMapState(val);
+  selectBaseMap(val) {
+    this.props.onSetBaseMap(val);
   }
 
   onSkip = (target) => {
@@ -142,46 +142,47 @@ export default class AppToolbar extends React.Component {
   }
 
   render() {
-    const views = [
+    const baseMaps = [
       {
-        id: "map",
-        group: "general",
-        title: "Map",
+        id: "microsoft_light",
+        title: "Microsoft light (road)"
       },
       {
-        id: "inspect",
-        group: "general",
-        title: "Inspect",
-        disabled: this.props.renderer !== 'mbgljs',
+        id: "microsoft_dark",
+        title: "Microsoft dark (night)"
       },
       {
-        id: "filter-deuteranopia",
-        group: "color-accessibility",
-        title: "Deuteranopia filter",
-        disabled: !colorAccessibilityFiltersEnabled,
+        id: "microsoft_grayscale_light",
+        title: "Microsoft grayscale light"
       },
       {
-        id: "filter-protanopia",
-        group: "color-accessibility",
-        title: "Protanopia filter",
-        disabled: !colorAccessibilityFiltersEnabled,
+        id: "microsoft_grayscale_dark",
+        title: "Microsoft grayscale dark"
       },
       {
-        id: "filter-tritanopia",
-        group: "color-accessibility",
-        title: "Tritanopia filter",
-        disabled: !colorAccessibilityFiltersEnabled,
+        id: "microsoft_shaded_relief",
+        title: "Microsoft light (road_shaded_relief)"
       },
       {
-        id: "filter-achromatopsia",
-        group: "color-accessibility",
-        title: "Achromatopsia filter",
-        disabled: !colorAccessibilityFiltersEnabled,
+        id: "microsoft_high_contrast_light",
+        title: "Microsoft high contrast light"
+      },
+      {
+        id: "microsoft_high_contrast_dark",
+        title: "Microsoft high contrast dark"
+      },
+      {
+        id: "microsoft_satellite",
+        title: "Microsoft satellite"
+      },
+      {
+        id: "microsoft_satellite_road",
+        title: "Microsoft satellite with road labels"
       },
     ];
 
-    const currentView = views.find((view) => {
-      return view.id === this.props.mapState;
+    const currentBaseMap = baseMaps.find(baseMap => {
+      return baseMap.id === this.props.baseMap;
     });
 
     return <nav className='maputnik-toolbar'>
@@ -230,54 +231,27 @@ export default class AppToolbar extends React.Component {
             <IconText>Open</IconText>
           </ToolbarAction>
           <ToolbarAction wdKey="nav:export" onClick={this.props.onToggleModal.bind(this, 'export')}>
-            <MdFileDownload />
-            <IconText>Export</IconText>
+            <MdSave />
+            <IconText>Save</IconText>
           </ToolbarAction>
-          <ToolbarAction wdKey="nav:sources" onClick={this.props.onToggleModal.bind(this, 'sources')}>
-            <MdLayers />
-            <IconText>Data Sources</IconText>
-          </ToolbarAction>
-          <ToolbarAction wdKey="nav:settings" onClick={this.props.onToggleModal.bind(this, 'settings')}>
-            <MdSettings />
-            <IconText>Style Settings</IconText>
-          </ToolbarAction>
-
           <ToolbarSelect wdKey="nav:inspect">
-            <MdFindInPage />
-            <label>View
+            <MdLayers />
+            <label>Base map
               <select
                 className="maputnik-select"
-                onChange={(e) => this.handleSelection(e.target.value)}
-                value={currentView.id}
+                onChange={(e) => this.selectBaseMap(e.target.value)}
+                value={currentBaseMap.id}
               >
-                {views.filter(v => v.group === "general").map((item) => {
+                {baseMaps.map(item => {
                   return (
-                    <option key={item.id} value={item.id} disabled={item.disabled}>
+                    <option key={item.id} value={item.id}>
                       {item.title}
                     </option>
                   );
                 })}
-                <optgroup label="Color accessibility">
-                  {views.filter(v => v.group === "color-accessibility").map((item) => {
-                    return (
-                      <option key={item.id} value={item.id} disabled={item.disabled}>
-                        {item.title}
-                      </option>
-                    );
-                  })}
-                </optgroup>
               </select>
             </label>
           </ToolbarSelect>
-
-          <ToolbarLink href={"https://github.com/maputnik/editor/wiki"}>
-            <MdHelpOutline />
-            <IconText>Help</IconText>
-          </ToolbarLink>
-          <ToolbarLinkHighlighted href={"https://gregorywolanski.typeform.com/to/cPgaSY"}>
-            <MdAssignmentTurnedIn />
-            <IconText>Take the Maputnik Survey</IconText>
-          </ToolbarLinkHighlighted>
         </div>
       </div>
     </nav>

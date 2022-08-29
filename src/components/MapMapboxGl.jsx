@@ -57,6 +57,8 @@ export default class MapMapboxGl extends React.Component {
     onDataChange: PropTypes.func,
     onLayerSelect: PropTypes.func.isRequired,
     mapStyle: PropTypes.object.isRequired,
+    selectableLayers: PropTypes.array.isRequired,
+    openStyleTransition: PropTypes.bool.isRequired,
     inspectModeEnabled: PropTypes.bool.isRequired,
     highlightedLayer: PropTypes.object,
     options: PropTypes.object,
@@ -80,31 +82,33 @@ export default class MapMapboxGl extends React.Component {
       map: null,
       inspect: null,
     }
+    this.prevSelectableLayers = null;
   }
 
-  updateMapFromProps(props) {
+  updateMapFromProps() {
     if(!IS_SUPPORTED) return;
 
     if(!this.state.map) return
-    const metadata = props.mapStyle.metadata || {}
+    const metadata = this.props.mapStyle.metadata || {}
     MapboxGl.accessToken = metadata['maputnik:mapbox_access_token'] || tokens.mapbox
 
     //Mapbox GL now does diffing natively so we don't need to calculate
     //the necessary operations ourselves!
     this.state.map.setStyle(
-      this.props.replaceAccessTokens(props.mapStyle),
+      this.props.replaceAccessTokens(this.props.mapStyle),
       {diff: true}
     )
-  }
 
-  shouldComponentUpdate(nextProps, nextState) {
-    let should = false;
-    try {
-      should = JSON.stringify(this.props) !== JSON.stringify(nextProps) || JSON.stringify(this.state) !== JSON.stringify(nextState);
-    } catch(e) {
-      // no biggie, carry on
+    if (this.props.openStyleTransition) {
+      let target = {};
+      if (this.props.mapStyle.center) target.center = this.props.mapStyle.center;
+      if (this.props.mapStyle.zoom) target.zoom = this.props.mapStyle.zoom;
+      if (this.props.mapStyle.metadata && this.props.mapStyle.metadata["azmaps:bbox"]) {
+        target = this.state.map.cameraForBounds(this.props.mapStyle.metadata["azmaps:bbox"]);
+      }
+      if (target.center || target.zoom) this.state.map.easeTo(target);
+      this.props.afterOpenStyleTransition();
     }
-    return should;
   }
 
   componentDidUpdate(prevProps) {
@@ -112,7 +116,16 @@ export default class MapMapboxGl extends React.Component {
 
     const map = this.state.map;
 
-    this.updateMapFromProps(this.props);
+    this.updateMapFromProps();
+
+    if (this.prevSelectableLayers != this.props.selectableLayers) {
+      this.prevSelectableLayers = this.props.selectableLayers;
+      if (this.state.inspect) {
+        this.state.inspect.options.queryParameters = {
+          layers: this.props.selectableLayers.map(layer => layer.id)
+        };
+      }
+    }
 
     if(this.state.inspect && this.props.inspectModeEnabled !== this.state.inspect._showInspectMap) {
       // HACK: Fix for <https://github.com/maputnik/editor/issues/576>, while we wait for a proper fix.
@@ -155,6 +168,9 @@ export default class MapMapboxGl extends React.Component {
       const center = map.getCenter();
       const zoom = map.getZoom();
       this.props.onChange({center, zoom});
+      this.setState({
+        zoom: map.getZoom()
+      });
     }
     mapViewChange();
 
@@ -169,7 +185,7 @@ export default class MapMapboxGl extends React.Component {
     map.addControl(nav, 'top-right');
 
     const tmpNode = document.createElement('div');
-
+    
     const inspect = new MapboxInspect({
       popup: new MapboxGl.Popup({
         closeOnClick: false
@@ -191,7 +207,7 @@ export default class MapMapboxGl extends React.Component {
         }
       }
     })
-    map.addControl(inspect)
+    map.addControl(inspect);
 
     map.on("style.load", () => {
       this.setState({
@@ -212,18 +228,12 @@ export default class MapMapboxGl extends React.Component {
       console.log("ERROR", e);
     })
 
-    map.on("zoom", e => {
-      this.setState({
-        zoom: map.getZoom()
-      });
-    });
-
     map.on("dragend", mapViewChange);
     map.on("zoomend", mapViewChange);
   }
 
   onLayerSelectById = (id) => {
-    const index = this.props.mapStyle.layers.findIndex(layer => layer.id === id);
+    const index = this.props.selectableLayers.findIndex(layer => layer.id === id);
     this.props.onLayerSelect(index);
   }
 

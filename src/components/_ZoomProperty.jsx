@@ -7,7 +7,6 @@ import InputButton from './InputButton'
 import InputSpec from './InputSpec'
 import InputNumber from './InputNumber'
 import InputSelect from './InputSelect'
-import FieldDocLabel from './FieldDocLabel'
 import Block from './Block'
 
 import DeleteStopButton from './_DeleteStopButton'
